@@ -1,0 +1,40 @@
+FROM --platform=linux/arm64/v8 ros:iron-ros-core
+
+SHELL ["/bin/bash", "-c"]
+
+
+ENV DEBIAN_FRONTEND noninteractive
+
+COPY ./dependencies /app/dep
+
+COPY ./src /app/src
+
+RUN --mount=type=cache,target=/var/cache/apt apt update -y
+
+RUN --mount=type=cache,target=/var/cache/apt xargs apt -y install < /app/dep/packages.txt
+
+RUN apt install git -y
+
+#RUN --mount=type=cache,target=/root/.cache/pip xargs pip3 install < /app/dep/python.txt
+
+RUN mkdir -p /app/cmd
+
+RUN mkdir -p /app/src/workspace
+
+COPY --chmod=755 ./addons /addon
+
+WORKDIR /addon
+
+RUN bash install.sh
+
+RUN ldconfig
+
+WORKDIR /
+
+#COPY --chmod=755 ./entrypoint.sh /entrypoint.sh
+
+
+#RUN chmod a+x ./entrypoint.sh
+RUN chmod -R a+x /app/cmd
+
+CMD [ "./entrypoint.sh" ]

@@ -1,0 +1,22 @@
+protorl:
+  arch:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]
+  debian:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]
+  fedora:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]
+  gentoo:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]
+  nixos:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]
+  opensuse:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]
+  ubuntu:
+    pip:
+       packages: ["git+https://github.com/philtabor/ProtoRL.git"]

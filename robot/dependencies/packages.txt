@@ -1,0 +1,10 @@
+python3-pip
+python3-rosdep
+libfftw3-dev
+ros-iron-rmw-cyclonedds-cpp
+ros-iron-rviz2
+ros-iron-joint-state-publisher-gui
+ros-iron-controller-manager
+ros-iron-rqt-image-view
+ros-iron-image-transport-plugins
+ros-iron-compressed-image-transport

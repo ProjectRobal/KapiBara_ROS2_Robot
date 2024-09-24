@@ -1,0 +1,36 @@
+version: '3.9'
+
+networks:
+  internet:
+    driver: bridge
+
+services:
+  robot:
+    container_name: kapibara_robot
+    network_mode: host
+    image: robot_ros
+    # networks:
+      # - internet
+    build:
+      dockerfile: ./Dockerfile
+      context: ./robot
+    env_file:
+      - ./robot/env/env
+    environment:
+      - ROS_DOMAIN_ID = 0
+    volumes:
+      - ./robot/entrypoint.sh:/entrypoint.sh:rwx
+      - ./robot/commands/:/app/cmd
+      - ./robot/dependencies/:/app/dep
+      - ./robot/src:/app/src:rw
+      - ./robot/dependencies/rosdep_package.list:/etc/ros/rosdep/sources.list.d/20-default.list
+      - /dev/shm:/dev/shm
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri/:/dev/dri/"
+      - /dev/snd:/dev/snd
+
+    group_add:
+      - video
