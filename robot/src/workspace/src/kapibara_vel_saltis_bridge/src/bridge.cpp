@@ -26,6 +26,10 @@ extern "C"
 
 #include <sensor_msgs/msg/imu.hpp>
 
+#include <kapibara_interfaces/msg/encoders_and_speed.hpp>
+
+#include <kapibara_interfaces/msg/can_ping.hpp>
+
 #include "kapibara_vel_saltis_bridge/can.hpp"
 
 
@@ -34,15 +38,20 @@ int main(int argc, char const *argv[])
 {
     rclcpp::init(argc, argv);
 
+    auto node = std::make_shared<rclcpp::Node>("vel_saltis_bridge");
+
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Starting Vel Saltis Can Bridge");
+
     CANBridge can;
 
     if(! can.start("can0") )
     {
-        std::cerr<<"Cannot start CAN!"<<std::endl;
+        // std::cerr<<"Cannot start CAN!"<<std::endl;
+        RCLCPP_ERROR(node->get_logger(),"Cannot start CAN!");
+        rclcpp::shutdown();
         return -1;
     }
-
-    auto node = std::make_shared<rclcpp::Node>("vel_saltis_can_bridge");
+    
 
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher = node->create_publisher<sensor_msgs::msg::Imu>("/imu",10);
 
@@ -54,6 +63,11 @@ int main(int argc, char const *argv[])
     {
         tofs[i] = node->create_publisher<sensor_msgs::msg::Range>(tof_topic+std::to_string(i),10);
     }
+
+    rclcpp::Publisher<kapibara_interfaces::msg::EncodersAndSpeed>::SharedPtr encoders_publisher = node->create_publisher<kapibara_interfaces::msg::EncodersAndSpeed>("/encoders",10);
+
+    rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("/ping",10);
+
 
     while(1)
     {
@@ -75,18 +89,14 @@ int main(int argc, char const *argv[])
 
                     // std::cout<<"Ping: "<<ping->msg[0]<<ping->msg[1]<<std::endl;
 
-                }
-            break;
+                    if( ping->msg[0]=='H' && ping->msg[1]=='I' )
+                    {
+                        auto _ping = kapibara_interfaces::msg::CanPing();
 
-            case IMU:
-                
-                {
-                    const imu_raw_t* imu = frame->to<imu_raw_t>();
+                        _ping.boardname = "vel saltis";
 
-
-                    // printf("IMU:\n  Gyro:\n     x:%f\n      y:%f\n      z:%f\n  Acceleration:\n       x:%f\n      y:%f\n      z:%f\n",
-                    // imu->gyroscope.x,imu->gyroscope.y,imu->gyroscope.z,imu->accelerometer.x,imu->accelerometer.y,imu->accelerometer.z);
-
+                        ping_publisher->publish(_ping);
+                    }
                 }
             break;
 
@@ -126,7 +136,7 @@ int main(int argc, char const *argv[])
 
                     auto _range =  sensor_msgs::msg::Range();
 
-                    _range.radiation_type = INFRARED;
+                    _range.radiation_type = sensor_msgs::msg::Range::INFRARED;
 
                     _range.field_of_view = 0.2618;
 
@@ -147,6 +157,59 @@ int main(int argc, char const *argv[])
 
                     // std::cout<<"Encoder distance left "<<static_cast<int>(enc->distance_left)<<" distance right: "<<enc->distance_right<<std::endl;
                     // std::cout<<"Speed  left "<<static_cast<int>(enc->speed_left)<<" speed right: "<<enc->speed_right<<std::endl;
+
+                    auto _encoders = kapibara_interfaces::msg::EncodersAndSpeed();
+
+                    _encoders.distance_left = enc->distance_left;
+                    _encoders.distance_right = enc->distance_right;
+
+                    _encoders.speed_left = enc->speed_left;
+                    _encoders.speed_right = enc->speed_right;
+
+                    encoders_publisher->publish(_encoders);
+                }
+            break;
+
+            // used by configuration services
+            case ACK:
+                {
+                    const ack_msg_t* enc = frame->to<ack_msg_t>();
+                }
+            break;
+
+            case FUSION_CFG:
+                {
+                    const fusion_cfg_t* enc = frame->to<fusion_cfg_t>();
+                }
+            break;
+
+            case MOTOR_CFG:
+                {
+                    const motor_cfg_t* enc = frame->to<motor_cfg_t>();
+                }
+            break;
+
+            case SERVO_CFG:
+                {
+                    const servo_cfg_t* enc = frame->to<servo_cfg_t>();
+                }
+            break;
+
+            case PID_CFG:
+                {
+                    const pid_cfg_t* enc = frame->to<pid_cfg_t>();
+                }
+            break;
+
+            case AUX_CFG:
+                {
+                    const aux_cfg_t* enc = frame->to<aux_cfg_t>();
+                }
+            break;
+
+            case IMU_CFG:
+                {
+                    const imu_cfg_t* enc = frame->to<imu_cfg_t>();
                 }
             break;
             

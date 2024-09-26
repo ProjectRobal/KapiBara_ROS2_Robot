@@ -1,0 +1,2 @@
+string boardname
+string submodule

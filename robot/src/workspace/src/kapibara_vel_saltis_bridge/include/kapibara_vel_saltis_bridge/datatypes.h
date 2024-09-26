@@ -9,15 +9,15 @@ typedef enum packet_type
     PING=0,
     IMU=1,
     Orientation=2,
-    TOF=4,
     Encoder=3,
+    TOF=4,
+    FUSION_CFG=249,
     ACK=250,
-    IMU_CFG=255,
-    AUX_CFG=254,
-    PID_CFG=253,
-    SERVO_CFG=252,
     MOTOR_CFG=251,
-    FUSION_CFG=249
+    SERVO_CFG=252,
+    PID_CFG=253,
+    AUX_CFG=254,
+    IMU_CFG=255,
 } packet_type_t;
 
 typedef struct fusion_cfg
@@ -43,9 +43,9 @@ typedef struct servo_cfg
 
 typedef struct PID
 {
-    int32_t p;
-    int32_t i;
-    int32_t d;
+    float p;
+    float i;
+    float d;
 } PID_t ;
 
 typedef struct pid_cfg
@@ -53,7 +53,7 @@ typedef struct pid_cfg
     PID_t pid_left;
     PID_t pid_right;
     uint8_t open;
-} pid_cfg_t ;;
+} pid_cfg_t ;
 
 typedef struct ack_msg
 {

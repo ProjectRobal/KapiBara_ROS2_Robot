@@ -10,6 +10,10 @@ if [ "$arg" = "start" ]; then
 
 docker compose -f compose.yml up --remove-orphans
 
+elif [ "$arg" = "compile" ]; then
+
+docker compose -f build_compose.yml up
+
 elif [ "$arg" = "purge" ]; then
 
 docker compose -f compose.yml down

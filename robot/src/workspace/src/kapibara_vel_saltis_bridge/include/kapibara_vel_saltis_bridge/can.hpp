@@ -40,13 +40,13 @@ class CANBridge
         CanFrame(sizeof(orientation_t),Orientation),
         CanFrame(sizeof(encoder_t),Encoder),
         CanFrame(sizeof(tof_t),TOF),
-        CanFrame(sizeof(ack_msg_t),ACK),
-        CanFrame(sizeof(imu_cfg_t),IMU_CFG),
-        CanFrame(sizeof(aux_cfg_t),AUX_CFG),
-        CanFrame(sizeof(pid_cfg_t),PID_CFG),
-        CanFrame(sizeof(servo_cfg_t),SERVO_CFG),
-        CanFrame(sizeof(motor_cfg_t),MOTOR_CFG),
         CanFrame(sizeof(fusion_cfg_t),FUSION_CFG),
+        CanFrame(sizeof(ack_msg_t),ACK),
+        CanFrame(sizeof(motor_cfg_t),MOTOR_CFG),
+        CanFrame(sizeof(servo_cfg_t),SERVO_CFG),
+        CanFrame(sizeof(pid_cfg_t),PID_CFG),
+        CanFrame(sizeof(aux_cfg_t),AUX_CFG),
+        CanFrame(sizeof(imu_cfg_t),IMU_CFG)
     }
     {}
 

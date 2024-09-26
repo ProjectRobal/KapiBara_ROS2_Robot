@@ -1,0 +1,2 @@
+geometry_msgs/Vector3 gryscope_offset
+geometry_msgs/Vector3 accelerometer_offset

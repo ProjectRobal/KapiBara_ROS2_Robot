@@ -43,6 +43,11 @@ const CanFrame* CANBridge::recive()
 
         uint8_t id = frame.data[0];
 
+        if( id >= packet_type_t::FUSION_CFG )
+        {
+            id -= 244;
+        }
+
         if( id >= PACKET_TYPE_COUNT )
         {
             return NULL;

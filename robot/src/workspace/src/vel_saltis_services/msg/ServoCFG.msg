@@ -1,0 +1,2 @@
+uint8 angel_left
+uint8 angel_right
