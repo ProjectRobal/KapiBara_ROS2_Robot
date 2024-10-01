@@ -23,6 +23,7 @@ extern "C"
 
 #include "datatypes.h"
 
+#define VEL_SALTIS_ID 1
 
 class CANBridge
 {
@@ -50,7 +51,7 @@ class CANBridge
     }
     {}
 
-    bool start(const char* can_name);
+    bool start(const char* can_name,uint32_t id=VEL_SALTIS_ID,uint32_t mask=0xF);
 
     /*
         data - data to send
@@ -59,7 +60,10 @@ class CANBridge
         id - a device register bank id
         offset - register bank offset in bytes
     */
-    void send(uint8_t* data,uint32_t size,uint16_t target,uint16_t id,uint16_t offset);
+    void send(uint8_t* data,uint32_t size,uint16_t target,uint16_t id);
+
+    // send just header
+    void send_id(uint16_t target,uint16_t id);
 
     const CanFrame* recive();
 

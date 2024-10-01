@@ -56,6 +56,10 @@
         "typeindex": "cpp",
         "variant": "cpp",
         "filesystem": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "hash_map": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "numeric": "cpp"
     }
 }

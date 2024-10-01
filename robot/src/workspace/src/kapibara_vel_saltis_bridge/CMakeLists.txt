@@ -12,6 +12,8 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(kapibara_interfaces REQUIRED)
+find_package(vel_saltis_services REQUIRED)
+
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -29,7 +31,7 @@ file(GLOB all_SRCS
         )
 
 add_executable(bridge ${all_SRCS})
-ament_target_dependencies(bridge rclcpp sensor_msgs geometry_msgs std_msgs kapibara_interfaces)
+ament_target_dependencies(bridge rclcpp sensor_msgs geometry_msgs std_msgs kapibara_interfaces vel_saltis_services)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

@@ -14,6 +14,7 @@
 
   <depend>rclcpp</depend>
   <depend>kapibara_interfaces</depend>
+  <depend>vel_saltis_services</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>

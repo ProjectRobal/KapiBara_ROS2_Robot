@@ -1,7 +1,7 @@
 #include "kapibara_vel_saltis_bridge/can.hpp"
 
 
-bool CANBridge::start(const char* can_name)
+bool CANBridge::start(const char* can_name,uint32_t id,uint32_t mask)
     {
         if ((this->can_sock = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
             std::cerr<<"Unable to open can socket: "<<can_name<<std::endl;
@@ -21,6 +21,14 @@ bool CANBridge::start(const char* can_name)
             std::cerr<<"Unable to bind can socket: "<<can_name<<std::endl;
             return false;
         }
+
+        // filter only data from specific id
+        struct can_filter rfilter[1];
+
+        rfilter[0].can_id = id;
+        rfilter[0].can_mask = mask;
+
+        setsockopt(this->can_sock, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
 
         return true;
     }
@@ -69,6 +77,22 @@ const CanFrame* CANBridge::recive()
         return NULL;
     }
 
+
+void CANBridge::send_id(uint16_t target,uint16_t id)
+{
+    struct can_frame frame;
+    frame.can_id = target;
+
+    frame.data[0] = id;
+
+    frame.can_dlc = 1;
+
+    if (write(this->can_sock, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
+        std::cerr<<"Cannot send frame!"<<std::endl;
+    }
+
+
+}
     /*
         data - data to send
         size - data size
@@ -76,8 +100,10 @@ const CanFrame* CANBridge::recive()
         id - a device register bank id
         offset - register bank offset in bytes
     */
-void CANBridge::send(uint8_t* data,uint32_t size,uint16_t target,uint16_t id,uint16_t offset)
+void CANBridge::send(uint8_t* data,uint32_t size,uint16_t target,uint16_t id)
     {
+
+        uint16_t offset = 0;
 
         uint32_t data_offset = 0;
 

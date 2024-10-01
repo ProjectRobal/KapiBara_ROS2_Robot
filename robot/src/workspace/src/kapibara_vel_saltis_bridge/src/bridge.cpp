@@ -1,5 +1,9 @@
 #include <iostream>
 
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -33,25 +37,47 @@ extern "C"
 #include "kapibara_vel_saltis_bridge/can.hpp"
 
 
+// services include
 
-int main(int argc, char const *argv[])
+#include <vel_saltis_services/srv/get_imu_cfg.hpp>
+#include <vel_saltis_services/srv/set_imu_cfg.hpp>
+
+#include <kapibara_vel_saltis_bridge/event.hpp>
+
+class BridgeNode : public rclcpp::Node
 {
-    rclcpp::init(argc, argv);
-
-    auto node = std::make_shared<rclcpp::Node>("vel_saltis_bridge");
-
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Starting Vel Saltis Can Bridge");
-
-    CANBridge can;
-
-    if(! can.start("can0") )
-    {
-        // std::cerr<<"Cannot start CAN!"<<std::endl;
-        RCLCPP_ERROR(node->get_logger(),"Cannot start CAN!");
-        rclcpp::shutdown();
-        return -1;
+public:
+    BridgeNode() : Node("vel_saltis_bridge") {
+        this->declare_parameter("device", "can0");
+        this->declare_parameter("tof_count", 4);
     }
-    
+
+    std::string deviceName()
+    {
+        return this->get_parameter("device").as_string();
+    }
+
+    uint64_t tofCount()
+    {
+        uint64_t out = this->get_parameter("tof_count").as_int();
+
+        out = std::min<uint64_t>(out,8);
+
+        return out;
+    }
+private:
+};
+
+CANBridge can;
+
+Event<ack_msg_t> ack_event;
+
+Event<imu_cfg_t> imu_event;
+
+
+// sepeare task for can reciving
+void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
+{
 
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher = node->create_publisher<sensor_msgs::msg::Imu>("/imu",10);
 
@@ -71,7 +97,6 @@ int main(int argc, char const *argv[])
 
     while(1)
     {
-        rclcpp::spin_some(node);
         const CanFrame* frame = can.recive();
 
         if( frame == NULL )
@@ -110,7 +135,7 @@ int main(int argc, char const *argv[])
                     _imu.orientation.y = fusion->y;
                     _imu.orientation.z = fusion->z;
                     _imu.orientation.w = fusion->w;
-
+ 
                     _imu.angular_velocity.x = fusion->imu.gyroscope.x;
                     _imu.angular_velocity.y = fusion->imu.gyroscope.y;
                     _imu.angular_velocity.z = fusion->imu.gyroscope.z;
@@ -174,6 +199,8 @@ int main(int argc, char const *argv[])
             case ACK:
                 {
                     const ack_msg_t* enc = frame->to<ack_msg_t>();
+
+                    ack_event.notify(*enc);
                 }
             break;
 
@@ -209,7 +236,12 @@ int main(int argc, char const *argv[])
 
             case IMU_CFG:
                 {
+                    // send recived imu configuration
                     const imu_cfg_t* enc = frame->to<imu_cfg_t>();
+
+                    // notify service task that configuration are ready
+                    imu_event.notify(*enc);
+                    
                 }
             break;
             
@@ -218,6 +250,103 @@ int main(int argc, char const *argv[])
         }
 
     }
+
+}
+
+// services
+
+void get_imu_cfg(std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    // send request
+    can.send_id(VEL_SALTIS_ID,id);
+
+    // wait for response from can bus, for about 60 seconds
+    imu_cfg_t cfg = {0};
+
+    if(!imu_event.wait_for(cfg,60))
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get imu configuration timeouted!");
+    }
+
+    response->config.accelerometer_offset.x = cfg.accelerometer_offset.x;
+    response->config.accelerometer_offset.y = cfg.accelerometer_offset.y;
+    response->config.accelerometer_offset.z = cfg.accelerometer_offset.z;
+
+    response->config.gyroscope_offset.x = cfg.gyroscope_offset.x;
+    response->config.gyroscope_offset.y = cfg.gyroscope_offset.y;
+    response->config.gyroscope_offset.z = cfg.gyroscope_offset.z;
+}
+
+void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    imu_cfg_t cfg;
+
+    cfg.accelerometer_offset.x = request->config.accelerometer_offset.x;
+    cfg.accelerometer_offset.y = request->config.accelerometer_offset.y;
+    cfg.accelerometer_offset.z = request->config.accelerometer_offset.z;
+
+    cfg.gyroscope_offset.x = request->config.gyroscope_offset.x;
+    cfg.gyroscope_offset.y = request->config.gyroscope_offset.y;
+    cfg.gyroscope_offset.z = request->config.gyroscope_offset.z;
+
+    // send configuration to board
+    can.send((uint8_t*)&cfg,sizeof(imu_cfg_t),VEL_SALTIS_ID,id);
+
+    // wait for ack from can bus, for about 60 seconds
+    ack_msg_t msg;
+
+    bool ok = ack_event.wait_for(msg,60);
+    
+    if( ok )
+    {
+        response->ok = msg.msg[0] == 'I' && msg.msg[1] == 'U';
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Vel Saltis couldn't get ACK in time!");
+        response->ok = false;
+    }
+
+}
+
+
+int main(int argc, char const *argv[])
+{
+    rclcpp::init(argc, argv);
+
+    auto node = std::make_shared<BridgeNode>();
+
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Starting Vel Saltis Can Bridge");
+
+
+    if(! can.start(node->deviceName().c_str()) )
+    {
+        RCLCPP_ERROR(node->get_logger(),"Cannot start CAN!");
+        rclcpp::shutdown();
+        return -1;
+    }
+
+
+    rclcpp::Service<vel_saltis_services::srv::SetImuCFG>::SharedPtr set_imu_srv = node->create_service<vel_saltis_services::srv::SetImuCFG>("set_imu_cfg",&set_imu_cfg);
+    rclcpp::Service<vel_saltis_services::srv::GetImuCFG>::SharedPtr get_imu_srv = node->create_service<vel_saltis_services::srv::GetImuCFG>("get_imu_cfg",&get_imu_cfg);
+
+    std::thread can_thread(can_task,node,node->tofCount());
+    
+    rclcpp::spin(node);
+    can_thread.join();
+    rclcpp::shutdown();
 
     return 0;
 }
