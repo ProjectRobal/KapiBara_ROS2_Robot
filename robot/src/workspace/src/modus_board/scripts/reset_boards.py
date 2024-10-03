@@ -19,7 +19,7 @@ class ResetBoardsService(Node):
         super().__init__('enable_boards_service')
         self.declare_parameter("pin",3)
         
-        pin = self.get_parameter("pin").get_parameter_value().int_value
+        pin = self.get_parameter("pin").get_parameter_value().integer_value
         
         self.chip = gpiod.Chip('gpiochip4')
         

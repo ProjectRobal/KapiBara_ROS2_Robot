@@ -24,31 +24,22 @@ def generate_launch_description():
     #     ]
     # ))
     
-    pkg_name = 'gym'
+    # pkg_name = 'kapibara_vel_saltis_bridge'
     
-    rviz = Node(package='rviz2', executable='rviz2',
-                    arguments=[],
-                    output='screen')
-
-    launch=IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            os.path.join(
-            get_package_share_directory(pkg_name),'launch','start.gym.py')
-        ]
-    ),
-        launch_arguments={
-            "exec":"main.py"
-        }.items()
-    )
+    vel_saltis_bridge = Node(package="kapibara_vel_saltis_bridge",executable='bridge',
+                             arguments=[],
+                             output='screen')
     
-    rqt=Node(package='rqt_image_view', executable='rqt_image_view',
-                    arguments=[],
-                    output='screen')
+    reset_board_services =  Node(package="modus_board",executable='enable_boards.py',
+                             arguments=[],
+                             output='screen')
+    
 
 
     # Run the node
     return LaunchDescription([
-        launch
+        reset_board_services,
+        vel_saltis_bridge
         #rviz
     ])
 

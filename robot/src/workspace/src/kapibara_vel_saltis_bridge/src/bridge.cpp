@@ -263,6 +263,7 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     // imu id
     uint8_t id = 0;
 
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with IMU config request!");
     // send request
     can.send_id(VEL_SALTIS_ID,id);
 

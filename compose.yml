@@ -6,14 +6,17 @@ networks:
 
 services:
   robot:
-    container_name: kapibara_robot
+    container_name: kapibara_robot2
     network_mode: host
     image: robot_ros
+
+    privileged: true
     # networks:
       # - internet
     build:
       dockerfile: ./Dockerfile
       context: ./robot
+      privileged: true
     env_file:
       - ./robot/env/env
     environment:
@@ -24,13 +27,30 @@ services:
       - ./robot/dependencies/:/app/dep
       - ./robot/src:/app/src:rw
       - ./robot/dependencies/rosdep_package.list:/etc/ros/rosdep/sources.list.d/20-default.list
-      - /dev/shm:/dev/shm
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /sys:/sys
+      - /etc/udev:/etc/udev
+      - /run/udev:/run/udev:ro
+      - /run/dbus/:/run/dbus
+      - /dev:/dev
+      # - /dev/shm:/dev/shm
+      # - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
     devices:
-      - "/dev/kfd:/dev/kfd"
-      - "/dev/dri/:/dev/dri/"
       - /dev/snd:/dev/snd
+      - /dev/gpiomem0
+      - /dev/gpiomem1
+      # - /dev/video0
+      # - /dev/media0
+      # - /dev/media1
+      # - /dev/media2
+      # - /dev/media3
+      # - /dev/video1
+      # - /dev/v4l
+      # - /dev/v4l-subdev0
+      # - /dev/v4l-subdev1
+      # - /dev/v4l-subdev2
 
     group_add:
       - video
+      - dialout
+      - 993

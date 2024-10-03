@@ -18,7 +18,7 @@ class EnableBoardsService(Node):
         super().__init__('enable_boards_service')
         self.declare_parameter("pin",3)
         
-        pin = self.get_parameter("pin").get_parameter_value().int_value
+        pin = self.get_parameter("pin").get_parameter_value().integer_value
         
         self.chip = gpiod.Chip('gpiochip4')
         
@@ -28,6 +28,7 @@ class EnableBoardsService(Node):
         
         self.srv = self.create_service(EnableBoards, 'enable_boards', self.enable_board_callback)
 
+    # here is crashing
     def enable_board_callback(self, request, response):
         
         n_state = request.enable
