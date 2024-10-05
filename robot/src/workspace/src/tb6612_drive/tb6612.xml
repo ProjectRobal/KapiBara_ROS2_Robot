@@ -1,9 +1,0 @@
-<library path="tb6612_drive">
-  <class name="tb6612_drive/TB6612Drive"
-         type="tb612_drive::TB6612Drive"
-         base_class_type="hardware_interface::SystemInterface">
-    <description>
-      Hardware Interface for Differential Drive Arduino controller.
-    </description>
-  </class>
-</library>

@@ -1,0 +1,9 @@
+<library path="vel_saltis_drive">
+  <class name="vel_saltis_drive/VelSaltisDrive"
+         type="vel_saltis_drive::VelSaltisDrive"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Hardware Interface for Vel Saltis board.
+    </description>
+  </class>
+</library>

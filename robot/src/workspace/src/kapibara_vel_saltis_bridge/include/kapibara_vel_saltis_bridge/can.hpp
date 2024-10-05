@@ -23,7 +23,8 @@ extern "C"
 
 #include "datatypes.h"
 
-#define VEL_SALTIS_ID 1
+#include "common.hpp"
+
 
 class CANBridge
 {
@@ -41,15 +42,15 @@ class CANBridge
         CanFrame(sizeof(orientation_t),Orientation),
         CanFrame(sizeof(encoder_t),Encoder),
         CanFrame(sizeof(tof_t),TOF),
-        CanFrame(sizeof(fusion_cfg_t),FUSION_CFG),
-        CanFrame(sizeof(ack_msg_t),ACK),
-        CanFrame(sizeof(motor_cfg_t),MOTOR_CFG),
-        CanFrame(sizeof(servo_cfg_t),SERVO_CFG),
-        CanFrame(sizeof(pid_cfg_t),PID_CFG),
-        CanFrame(sizeof(aux_cfg_t),AUX_CFG),
-        CanFrame(sizeof(imu_cfg_t),IMU_CFG)
+        CanFrame(CONFIG_MAX_BUFFER_SIZE,GENERAL_CFG_DATA),
+        CanFrame(sizeof(ack_msg_t),ACK)
     }
     {}
+
+    void set_recive_size(uint32_t size)
+    {
+        this->frames[5].overide_size(size);
+    }
 
     bool start(const char* can_name,uint32_t id=VEL_SALTIS_ID,uint32_t mask=0xF);
 

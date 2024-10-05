@@ -22,8 +22,8 @@
 
 #include "kapibara_interfaces/msg/diff_encoder.hpp" 
 
-#include "tb6612_drive/wheel.hpp"
-#include "tb6612_drive/PID.hpp"
+#include "vel_saltis_drive/wheel.hpp"
+#include "vel_saltis_drive/PID.hpp"
 
 #include "Config.hpp"
 
@@ -43,13 +43,13 @@
 
 */
 
-namespace tb612_drive
+namespace vel_saltis_drive
 {
-    class TB6612Drive : public hardware_interface::SystemInterface
-    {
+    class VelSaltisDrive : public hardware_interface::SystemInterface
+    {  
         public:
 
-        RCLCPP_SHARED_PTR_DEFINITIONS(TB6612Drive);
+        RCLCPP_SHARED_PTR_DEFINITIONS(VelSaltisDrive);
 
         hardware_interface::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &previous_state);
 

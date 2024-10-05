@@ -33,11 +33,11 @@ class ResetBoardsService(Node):
         
         self.reset_pin.set_line(1)        
         
-        time.sleep(5)
+        time.sleep(10)
         
         self.reset_pin.set_line(0) 
         
-        response.ok = not self.reset_pin.get_value()
+        response.ok = not bool(self.reset_pin.get_value())
 
         return response
     

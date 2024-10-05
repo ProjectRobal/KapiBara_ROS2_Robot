@@ -1,15 +1,15 @@
 #include "pluginlib/class_list_macros.hpp"
-#include "tb6612_drive/tb6612_drive.hpp"
+#include "vel_saltis_drive/vel_saltis_drive.hpp"
 
-#include "tb6612_drive/gpio_interface.hpp"
+#include "vel_saltis_drive/gpio_interface.hpp"
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-namespace tb612_drive
+namespace vel_saltis_drive
 {
 
-    hardware_interface::CallbackReturn TB6612Drive::on_init(const hardware_interface::HardwareInfo &hardware_info)
+    hardware_interface::CallbackReturn VelSaltisDrive::on_init(const hardware_interface::HardwareInfo &hardware_info)
     {
 
         if ( hardware_interface::SystemInterface::on_init(hardware_info) != hardware_interface::CallbackReturn::SUCCESS )
@@ -17,7 +17,7 @@ namespace tb612_drive
             return hardware_interface::CallbackReturn::ERROR;
         }
 
-        RCLCPP_INFO(rclcpp::get_logger("TB6612Drive"),"Configuring...");
+        RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"),"Configuring...");
 
         this->last_encoder_T=rclcpp::Time(0);
 
@@ -95,7 +95,7 @@ namespace tb612_drive
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    hardware_interface::CallbackReturn TB6612Drive::on_cleanup(const rclcpp_lifecycle::State &previous_state)
+    hardware_interface::CallbackReturn VelSaltisDrive::on_cleanup(const rclcpp_lifecycle::State &previous_state)
     {
         // uninit pins 
 
@@ -104,7 +104,7 @@ namespace tb612_drive
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    hardware_interface::CallbackReturn TB6612Drive::on_shutdown(const rclcpp_lifecycle::State &previous_state)
+    hardware_interface::CallbackReturn VelSaltisDrive::on_shutdown(const rclcpp_lifecycle::State &previous_state)
     {
 
         this->w_left.setPower(0);
@@ -116,7 +116,7 @@ namespace tb612_drive
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    hardware_interface::CallbackReturn TB6612Drive::on_deactivate(const rclcpp_lifecycle::State & previous_state)
+    hardware_interface::CallbackReturn VelSaltisDrive::on_deactivate(const rclcpp_lifecycle::State & previous_state)
     {
         this->w_left.setPower(0);
         this->w_right.setPower(0);
@@ -127,7 +127,7 @@ namespace tb612_drive
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    hardware_interface::CallbackReturn TB6612Drive::on_activate(const rclcpp_lifecycle::State &previous_state)
+    hardware_interface::CallbackReturn VelSaltisDrive::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
 
         this->w_left.setPower(0);
@@ -137,10 +137,10 @@ namespace tb612_drive
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    hardware_interface::CallbackReturn TB6612Drive::on_error(const rclcpp_lifecycle::State &previous_state)
+    hardware_interface::CallbackReturn VelSaltisDrive::on_error(const rclcpp_lifecycle::State &previous_state)
     {
 
-        RCLCPP_ERROR(rclcpp::get_logger("TB6612Drive"), "Error occured, stoping engine!!!");
+        RCLCPP_ERROR(rclcpp::get_logger("VelSaltisDrive"), "Error occured, stoping engine!!!");
 
         this->w_left.setPower(0);
         this->w_right.setPower(0);
@@ -152,7 +152,7 @@ namespace tb612_drive
     }
 
 
-    std::vector<hardware_interface::StateInterface> TB6612Drive::export_state_interfaces()
+    std::vector<hardware_interface::StateInterface> VelSaltisDrive::export_state_interfaces()
     {
 
         std::vector<hardware_interface::StateInterface> state_interfaces;
@@ -165,7 +165,7 @@ namespace tb612_drive
         return state_interfaces;
     }
 
-    std::vector<hardware_interface::CommandInterface> TB6612Drive::export_command_interfaces()
+    std::vector<hardware_interface::CommandInterface> VelSaltisDrive::export_command_interfaces()
     {
 
         std::vector<hardware_interface::CommandInterface> command_interfaces;
@@ -177,7 +177,7 @@ namespace tb612_drive
 
     }
 
-    hardware_interface::return_type TB6612Drive::read(const rclcpp::Time &time, const rclcpp::Duration &period)
+    hardware_interface::return_type VelSaltisDrive::read(const rclcpp::Time &time, const rclcpp::Duration &period)
     {
         if (rclcpp::ok())
         {
@@ -189,13 +189,13 @@ namespace tb612_drive
         return hardware_interface::return_type::OK;
     }
 
-    hardware_interface::return_type TB6612Drive::write(const rclcpp::Time &time, const rclcpp::Duration &period)
+    hardware_interface::return_type VelSaltisDrive::write(const rclcpp::Time &time, const rclcpp::Duration &period)
     {
 
         // update pwm according to cmd value
 
-        //RCLCPP_INFO(rclcpp::get_logger("TB6612Drive"), "CMD Left value: %f", this->w_left.cmd);
-        //RCLCPP_INFO(rclcpp::get_logger("TB6612Drive"), "CMD Right value: %f", this->w_right.cmd);
+        //RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"), "CMD Left value: %f", this->w_left.cmd);
+        //RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"), "CMD Right value: %f", this->w_right.cmd);
 
         double left_target_vel=this->w_left.targetVelocity()/this->cfg.loop_rate;
         double right_target_vel=this->w_right.targetVelocity()/this->cfg.loop_rate;
@@ -215,4 +215,4 @@ namespace tb612_drive
 
 #include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(
-  tb612_drive::TB6612Drive, hardware_interface::SystemInterface)
+  vel_saltis_drive::VelSaltisDrive, hardware_interface::SystemInterface)

@@ -4,12 +4,12 @@
 #include <string>
 #include <cmath>
 
-#include "tb6612_drive/pwm_interface.hpp"
-#include "tb6612_drive/gpio_interface.hpp"
+#include "vel_saltis_drive/pwm_interface.hpp"
+#include "vel_saltis_drive/gpio_interface.hpp"
 
 #include "Config.hpp"
 
-namespace tb612_drive
+namespace vel_saltis_drive 
 {
 
     class Wheel

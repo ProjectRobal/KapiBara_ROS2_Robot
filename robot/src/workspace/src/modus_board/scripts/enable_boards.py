@@ -35,7 +35,7 @@ class EnableBoardsService(Node):
         
         self.en_pin.set_value(n_state)
         
-        response.enabled = self.en_pin.get_value()
+        response.enabled = bool(self.en_pin.get_value())
 
         return response
     

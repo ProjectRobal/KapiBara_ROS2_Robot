@@ -43,6 +43,10 @@ extern "C"
 #include <vel_saltis_services/srv/set_imu_cfg.hpp>
 
 #include <kapibara_vel_saltis_bridge/event.hpp>
+#include <kapibara_vel_saltis_bridge/event_buffered.hpp>
+
+#include <kapibara_vel_saltis_bridge/common.hpp>
+
 
 class BridgeNode : public rclcpp::Node
 {
@@ -72,7 +76,7 @@ CANBridge can;
 
 Event<ack_msg_t> ack_event;
 
-Event<imu_cfg_t> imu_event;
+EventBuffered<CONFIG_MAX_BUFFER_SIZE> cfg_event;
 
 
 // sepeare task for can reciving
@@ -81,11 +85,11 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher = node->create_publisher<sensor_msgs::msg::Imu>("/imu",10);
 
-    rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr tofs[8];
+    rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr tofs[tofCount];
 
     std::string tof_topic="/distance_";
 
-    for(uint8_t i=0;i<8;++i)
+    for(uint8_t i=0;i<tofCount;++i)
     {
         tofs[i] = node->create_publisher<sensor_msgs::msg::Range>(tof_topic+std::to_string(i),10);
     }
@@ -196,6 +200,17 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
             break;
 
             // used by configuration services
+            case GENERAL_CFG_DATA:
+                {
+                    uint8_t data[CONFIG_MAX_BUFFER_SIZE];
+
+                    frame->dump(data);
+
+                    cfg_event.notify(data);
+                }
+            break;
+
+            // used by configuration services
             case ACK:
                 {
                     const ack_msg_t* enc = frame->to<ack_msg_t>();
@@ -204,46 +219,6 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                 }
             break;
 
-            case FUSION_CFG:
-                {
-                    const fusion_cfg_t* enc = frame->to<fusion_cfg_t>();
-                }
-            break;
-
-            case MOTOR_CFG:
-                {
-                    const motor_cfg_t* enc = frame->to<motor_cfg_t>();
-                }
-            break;
-
-            case SERVO_CFG:
-                {
-                    const servo_cfg_t* enc = frame->to<servo_cfg_t>();
-                }
-            break;
-
-            case PID_CFG:
-                {
-                    const pid_cfg_t* enc = frame->to<pid_cfg_t>();
-                }
-            break;
-
-            case AUX_CFG:
-                {
-                    const aux_cfg_t* enc = frame->to<aux_cfg_t>();
-                }
-            break;
-
-            case IMU_CFG:
-                {
-                    // send recived imu configuration
-                    const imu_cfg_t* enc = frame->to<imu_cfg_t>();
-
-                    // notify service task that configuration are ready
-                    imu_event.notify(*enc);
-                    
-                }
-            break;
             
             default:
                 break;
@@ -263,6 +238,8 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     // imu id
     uint8_t id = 0;
 
+    can.set_recive_size(sizeof(imu_cfg_t));
+
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with IMU config request!");
     // send request
     can.send_id(VEL_SALTIS_ID,id);
@@ -270,9 +247,16 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     // wait for response from can bus, for about 60 seconds
     imu_cfg_t cfg = {0};
 
-    if(!imu_event.wait_for(cfg,60))
+    if(!cfg_event.wait_for(cfg,60))
     {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get imu configuration timeouted!");
+    }
+
+    uint8_t* buff_cfg = (uint8_t*)&cfg;
+
+    for(size_t i=0;i<sizeof(imu_cfg_t);++i)
+    {
+        buff_cfg[i] = cfg_event[i];
     }
 
     response->config.accelerometer_offset.x = cfg.accelerometer_offset.x;

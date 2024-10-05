@@ -4,12 +4,6 @@ CanFrame::CanFrame(uint32_t packet_size,packet_type_t type)
     {
         this->packet_size = packet_size;
 
-        if(type == packet_type_t::Encoder)
-        {
-            std::cout<<"Packet size: "<<this->packet_size<<std::endl;
-        }
-
-
         this->data = new uint8_t[this->packet_size];
         this->type = type;
         this->size=0;
@@ -21,8 +15,6 @@ void CanFrame::read(const uint8_t* data,uint16_t size,uint16_t offset)
         {
             this->size = 0;
         }
-
-        
 
         // memcpy(((uint8_t*)this->data)+offset,data,size)        
 

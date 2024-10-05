@@ -51,11 +51,6 @@ const CanFrame* CANBridge::recive()
 
         uint8_t id = frame.data[0];
 
-        if( id >= packet_type_t::FUSION_CFG )
-        {
-            id -= 244;
-        }
-
         if( id >= PACKET_TYPE_COUNT )
         {
             return NULL;
@@ -88,7 +83,7 @@ void CANBridge::send_id(uint16_t target,uint16_t id)
     frame.can_dlc = 1;
 
     if (write(this->can_sock, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
-        std::cerr<<"Cannot send frame!"<<std::endl;
+        std::cerr<<"Cannot send frame, with id only!"<<std::endl;
     }
 
 

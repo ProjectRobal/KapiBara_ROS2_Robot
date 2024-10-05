@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(tb6612_drive)
+project(vel_saltis_drive)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -27,18 +27,18 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_library(tb6612_drive SHARED src/tb6612_drive.cpp  src/pwm_interface.cpp src/gpio_interface.cpp) 
+add_library(vel_saltis_drive SHARED src/vel_saltis_drive.cpp  src/pwm_interface.cpp src/gpio_interface.cpp) 
 
 find_package(kapibara_interfaces REQUIRED)
 
 
 target_include_directories(
-  tb6612_drive
+  vel_saltis_drive
   PRIVATE
   include
 )
 ament_target_dependencies(
-  tb6612_drive
+  vel_saltis_drive
   hardware_interface
   controller_manager
   rclcpp
@@ -46,10 +46,10 @@ ament_target_dependencies(
   kapibara_interfaces
 )
 
-pluginlib_export_plugin_description_file(hardware_interface tb6612.xml)
+pluginlib_export_plugin_description_file(hardware_interface vel_saltis_drive.xml)
 
 install(
-  TARGETS tb6612_drive
+  TARGETS vel_saltis_drive
   DESTINATION lib
 )
 
