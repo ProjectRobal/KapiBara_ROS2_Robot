@@ -4,8 +4,6 @@
 #include <string>
 #include <cmath>
 
-#include "vel_saltis_drive/pwm_interface.hpp"
-#include "vel_saltis_drive/gpio_interface.hpp"
 
 #include "Config.hpp"
 
@@ -28,74 +26,26 @@ namespace vel_saltis_drive
 
         double velocity;
 
-        gpio::PWM pwm;
-
-        gpio::GPIO MotorA;
-        gpio::GPIO MotorB;
-
         Wheel()
         {
 
         }
 
-        Wheel(const std::string& name,const double& EncoderResolution,const std::string& gpioA,const std::string& gpioB,const std::string& PWMChannel)
+        Wheel(const std::string& name,const double EncoderResolution)
         {
-            setup(name,EncoderResolution,gpioA,gpioB,PWMChannel);
+            setup(name,EncoderResolution);
         }
 
-        void setup(const std::string& name,const uint32_t& EncoderResolution,const std::string& gpioA,const std::string& gpioB,const std::string& PWMChannel)
+        void setup(const std::string& name,const uint32_t EncoderResolution)
         {
             this->name=name;
             this->EncoderToAngelRatio=(2*M_PI)/EncoderResolution;
-
-            this->pwm.setup(PWMChannel);
-            this->pwm.setPeroid(PWM_PERIOD);
-            this->pwm.setDuty(0);
-            
-            this->MotorA.setup(gpioA,gpio::Direction::OUTPUT);
-            this->MotorB.setup(gpioB,gpio::Direction::OUTPUT);
             
             this->cmd=0;
         }
 
-        void setPower(const double& pwr)
-        {
-            if(pwr>0)
-            {
-                this->forward();
-            }
-            else if(pwr<0)
-            {
-                this->backward();
-            }
-            else
-            {
-                this->stop();
-            }
 
-            this->pwm.setDuty(abs(pwr)*PWM_PERIOD);
-
-        }
-
-        void forward()
-        {
-            this->MotorA.enable();
-            this->MotorB.disable();
-        }
-
-        void backward()
-        {
-            this->MotorA.disable();
-            this->MotorB.enable();
-        }
-
-        void stop()
-        {
-            this->MotorA.enable();
-            this->MotorB.enable();
-        }
-
-        void update(const uint16_t& CurrentEncoderValue,const double& dt)
+        void update(const uint16_t CurrentEncoderValue,const double dt)
         {
             int16_t dEncoder = CurrentEncoderValue - this->lastEncoderValue;
 

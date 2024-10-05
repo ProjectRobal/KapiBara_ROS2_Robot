@@ -20,28 +20,11 @@
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
-#include "kapibara_interfaces/msg/diff_encoder.hpp" 
+#include "wheel.hpp"
 
-#include "vel_saltis_drive/wheel.hpp"
-#include "vel_saltis_drive/PID.hpp"
 
 #include "Config.hpp"
 
-/*
-
-    A hardware interface communicate with two joints.
-    It takes arguments:
-        GPIO numbers:
-        - MOTORA1
-        - MOTORA2
-        - MOTORB1
-        - MOTORB2
-
-        Joints names
-        
-    Additional functions for encoders topic retrival
-
-*/
 
 namespace vel_saltis_drive
 {
@@ -73,33 +56,10 @@ namespace vel_saltis_drive
 
         private:
 
-        void encoder_callback(const kapibara_interfaces::msg::DiffEncoder::SharedPtr msg)
-        {
-            rclcpp::Time curr_time=this->external->now();
-
-            RCLCPP_INFO(rclcpp::get_logger("TB6612Drive"), "Encoder left: '%d'", msg->motora);
-            RCLCPP_INFO(rclcpp::get_logger("TB6612Drive"), "Encoder right: '%d'", msg->motorb);
-
-            if(this->last_encoder_T>rclcpp::Time(0))
-            {
-                double dt=(curr_time.nanoseconds()-curr_time.nanoseconds())/pow(10,9);
-
-                this->w_left.update(msg->motora,dt);
-                this->w_right.update(msg->motorb,dt);
-            }
-
-
-        }
-
         Config cfg;
 
         Wheel w_left;
         Wheel w_right;
-
-        PID<double> left_pid;
-        PID<double> right_pid;
-
-        rclcpp::Time last_encoder_T;
 
         rclcpp::Node::SharedPtr external;
     };
