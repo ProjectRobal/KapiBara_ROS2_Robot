@@ -37,15 +37,13 @@ class EventBuffered
         return false;
     }
 
-    const T& wait()
+    void wait()
     {
         std::unique_lock<std::mutex> u_lock(this->m_lock);
 
         this->var.wait(u_lock,[this]{ return this->start;});
         
         this->start = false;
-
-        return this->value;
     }
 
     void notify(const uint8_t* data)
@@ -62,7 +60,7 @@ class EventBuffered
         this->var.notify_one();
     }
 
-    uint8_t operator[](size_t i=0)
+    uint8_t operator[](size_t i)
     {
         if(i>=Size)
         {

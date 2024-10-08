@@ -2,11 +2,18 @@
 
 #include <cstdint>
 
+enum packet_type_t
+{
+    Encoder=3
+};
+
 struct motor_msg_t
 {
     int16_t speed_left;
     int16_t speed_right;
 };
+
+#define ENCODER_ID 3
 
 struct speed_msg_t
 {

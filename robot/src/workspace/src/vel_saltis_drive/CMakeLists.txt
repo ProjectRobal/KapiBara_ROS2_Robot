@@ -27,7 +27,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_library(vel_saltis_drive SHARED src/vel_saltis_drive.cpp  src/pwm_interface.cpp src/gpio_interface.cpp) 
+add_library(vel_saltis_drive SHARED src/vel_saltis_drive.cpp  src/can.cpp src/frame.cpp) 
 
 find_package(kapibara_interfaces REQUIRED)
 

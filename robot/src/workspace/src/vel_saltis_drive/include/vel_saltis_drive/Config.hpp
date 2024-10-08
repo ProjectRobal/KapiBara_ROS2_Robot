@@ -4,15 +4,12 @@
 #include <string>
 #include <cstdint>
 
-#define PWM_PERIOD 20000000
-
-namespace tb612_drive
+namespace vel_saltis_drive
 {
 
     struct Config
     {
         // in nanoseconds it translets to 50Hz
-        // const uint32_t pwm_period=20000000;
         float loop_rate = 30;
         uint32_t encoder_resolution = 4096;
         std::string left_wheel_name = "left_wheel";
@@ -25,4 +22,4 @@ namespace tb612_drive
 }
 
 
-#endif
+#endif        // const uint32_t pwm_period=20000000;

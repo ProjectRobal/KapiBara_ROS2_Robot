@@ -13,13 +13,6 @@ typedef enum packet_type
     TOF=4,
     GENERAL_CFG_DATA=5,
     ACK=6,
-    // FUSION_CFG=249,
-    // ACK=250,
-    // MOTOR_CFG=251,
-    // SERVO_CFG=252,
-    // PID_CFG=253,
-    // AUX_CFG=254,
-    // IMU_CFG=255,
 } packet_type_t;
 
 typedef struct fusion_cfg

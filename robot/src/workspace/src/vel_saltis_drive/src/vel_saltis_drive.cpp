@@ -1,15 +1,37 @@
+#include <thread>
+
 #include "pluginlib/class_list_macros.hpp"
 #include "vel_saltis_drive/vel_saltis_drive.hpp"
-
-#include "vel_saltis_drive/gpio_interface.hpp"
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 #include "vel_saltis_drive/can_msg.hpp"
 
+#include "vel_saltis_drive/frame.hpp"
+
 namespace vel_saltis_drive
 {
+    void VelSaltisDrive::read_from_can()
+    {
+        while(this->can_run)
+        {
+            const CanFrame* frame = this->can.recive();
+
+            if( frame != NULL )
+            {
+                const speed_msg_t *msg = frame->to<speed_msg_t>();
+
+                this->can_mux.lock();
+                // update speed
+
+                this->speed = *msg;
+
+                this->can_mux.unlock();
+            }
+
+        }
+    }
 
     hardware_interface::CallbackReturn VelSaltisDrive::on_init(const hardware_interface::HardwareInfo &hardware_info)
     {
@@ -22,7 +44,9 @@ namespace vel_saltis_drive
 
         RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"),"Configuring...");
 
-        if( info_.hardware_parameters.counts("can_device") > 0 )
+        this->can_run = true;
+
+        if( info_.hardware_parameters.count("can_device") > 0 )
         {
             this->cfg.can_device = info_.hardware_parameters["can_device"];
         }
@@ -39,6 +63,12 @@ namespace vel_saltis_drive
 
         // open can socket
         
+        if( !this->can.start(this->cfg.can_device.c_str()) )
+        {
+            return hardware_interface::CallbackReturn::FAILURE;
+        }
+
+        this->can_task = std::thread([this](){this->read_from_can();});
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -46,6 +76,8 @@ namespace vel_saltis_drive
     hardware_interface::CallbackReturn VelSaltisDrive::on_cleanup(const rclcpp_lifecycle::State &previous_state)
     {
         // stop motors
+
+        this->send_motor_msg(0,0);
 
         // close can socket
 
@@ -56,6 +88,8 @@ namespace vel_saltis_drive
     {
         // stop motors
 
+        this->send_motor_msg(0,0);
+
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
@@ -63,12 +97,16 @@ namespace vel_saltis_drive
     {
         // stop motors
 
+        this->send_motor_msg(0,0);
+
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
     hardware_interface::CallbackReturn VelSaltisDrive::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
         // stop motors
+
+        this->send_motor_msg(0,0);
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -79,6 +117,8 @@ namespace vel_saltis_drive
         RCLCPP_ERROR(rclcpp::get_logger("VelSaltisDrive"), "Error occured, stoping engine!!!");
 
         // stop motors
+
+        this->send_motor_msg(0,0);
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -111,8 +151,17 @@ namespace vel_saltis_drive
 
     hardware_interface::return_type VelSaltisDrive::read(const rclcpp::Time &time, const rclcpp::Duration &period)
     {
+        this->can_mux.lock();
 
         // read wheel distance and speed from board
+
+        this->w_left.velocity = speed.speed_left / this->w_left.EncoderToAngelRatio;
+        this->w_right.velocity = speed.speed_right / this->w_right.EncoderToAngelRatio;
+
+        this->w_left.position = speed.distance_left / this->w_left.EncoderToAngelRatio;
+        this->w_right.position = speed.distance_right / this->w_right.EncoderToAngelRatio;
+
+        this->can_mux.unlock();
 
         return hardware_interface::return_type::OK;
     }
@@ -125,8 +174,13 @@ namespace vel_saltis_drive
         //RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"), "CMD Left value: %f", this->w_left.cmd);
         //RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"), "CMD Right value: %f", this->w_right.cmd);
 
-        double left_target_vel=this->w_left.targetVelocity()/this->cfg.loop_rate;
-        double right_target_vel=this->w_right.targetVelocity()/this->cfg.loop_rate;
+        // double left_target_vel=this->w_left.targetVelocity()/this->cfg.loop_rate;
+        // double right_target_vel=this->w_right.targetVelocity()/this->cfg.loop_rate;
+
+        int16_t left_target_vel = this->w_left.cmd*this->w_left.EncoderToAngelRatio;
+        int16_t right_target_vel = this->w_right.cmd*this->w_left.EncoderToAngelRatio;
+
+        this->send_motor_msg(left_target_vel,right_target_vel);
         
         // send speed to motors
 

@@ -4,6 +4,8 @@
 #include <cstring>
 #include <vector>
 #include <chrono>
+#include <mutex>
+
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/node.hpp"
 #include "rclcpp/subscription.hpp"
@@ -20,10 +22,15 @@
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
+#include "can_msg.hpp"
+
+#include "common.hpp"
+
 #include "wheel.hpp"
 
-
 #include "Config.hpp"
+
+#include "can.hpp"
 
 
 namespace vel_saltis_drive
@@ -61,7 +68,30 @@ namespace vel_saltis_drive
         Wheel w_left;
         Wheel w_right;
 
-        rclcpp::Node::SharedPtr external;
+        speed_msg_t speed;
+
+        CANBridge can;
+
+        std::mutex can_mux;
+
+        bool can_run;
+
+        std::thread can_task;
+
+        void read_from_can();
+
+        void send_motor_msg(int16_t speed_left,int16_t speed_right)
+        {
+            motor_msg_t motors = {
+                .speed_left = speed_left,
+                .speed_right = speed_right
+            };
+
+            uint8_t* buff = (uint8_t*)&motors;
+
+            this->can.send(buff,sizeof(motors),VEL_SALTIS_ID,4);
+        }
+
     };
 }
 

@@ -7,7 +7,7 @@
 #include <cstring>
 #include <cstdint>
 
-#include "datatypes.h"
+#include "can_msg.hpp"
 
 class CanFrame
 {
@@ -20,7 +20,8 @@ class CanFrame
     
     CanFrame(uint32_t packet_size,packet_type_t type);
 
-    CanFrame(){}
+    CanFrame()
+    {}
 
     void overide_size(uint32_t size)
     {
@@ -41,7 +42,7 @@ class CanFrame
         return (T*)this->data;
     }
 
-    void dump(uint8_t buff[]) const
+    void dump(uint8_t buff[])
     {
         for(size_t i=0;i<this->packet_size;++i)
         {

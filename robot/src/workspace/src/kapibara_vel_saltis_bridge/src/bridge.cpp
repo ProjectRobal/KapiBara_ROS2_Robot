@@ -247,7 +247,7 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     // wait for response from can bus, for about 60 seconds
     imu_cfg_t cfg = {0};
 
-    if(!cfg_event.wait_for(cfg,60))
+    if(!cfg_event.wait_for(60))
     {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get imu configuration timeouted!");
     }

@@ -7,6 +7,8 @@
 #include <cstring>
 #include <cstdint>
 
+#include <map>
+
 extern "C"
 {
     #include <unistd.h>
@@ -19,11 +21,9 @@ extern "C"
 
 }
 
-#include <map>
-
 #include "frame.hpp"
 
-#include "datatypes.h"
+#include "can_msg.hpp"
 
 #include "common.hpp"
 
@@ -41,19 +41,7 @@ class CANBridge
 
     CANBridge()
     {
-        this->frames[PING] = CanFrame(sizeof(ping_msg),PING);
-        this->frames[IMU] = CanFrame(sizeof(imu_raw_t),IMU);
-        this->frames[Orientation] = CanFrame(sizeof(orientation_t),Orientation);
-        this->frames[Encoder] = CanFrame(sizeof(encoder_t),Encoder);
-        this->frames[TOF] = CanFrame(sizeof(tof_t),TOF);
-        this->frames[GENERAL_CFG_DATA] = CanFrame(CONFIG_MAX_BUFFER_SIZE,GENERAL_CFG_DATA);
-        this->frames[ACK] = CanFrame(sizeof(ack_msg_t),ACK);
-
-    }
-
-    void set_recive_size(uint32_t size)
-    {
-        this->frames[GENERAL_CFG_DATA].overide_size(size);
+        this->frames[Encoder] = CanFrame(sizeof(speed_msg_t),Encoder);
     }
 
     bool start(const char* can_name,uint32_t id=VEL_SALTIS_ID,uint32_t mask=0xF);

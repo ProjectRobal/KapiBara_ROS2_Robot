@@ -1,4 +1,4 @@
-#include "kapibara_vel_saltis_bridge/can.hpp"
+#include "vel_saltis_drive/can.hpp"
 
 
 bool CANBridge::start(const char* can_name,uint32_t id,uint32_t mask)
@@ -50,7 +50,6 @@ const CanFrame* CANBridge::recive()
         }
 
         packet_type_t id = static_cast<packet_type_t>(frame.data[0]);
-
 
         if( this->frames.count(id) != 0 )
         {

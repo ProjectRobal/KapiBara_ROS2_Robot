@@ -61,7 +61,7 @@ namespace vel_saltis_drive
 
         double targetVelocity()
         {
-            return this->cmd/this->EncoderToAngelRatio;
+            return this->cmd;///this->EncoderToAngelRatio;
         }
 
     };

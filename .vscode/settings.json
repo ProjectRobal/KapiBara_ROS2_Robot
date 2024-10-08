@@ -60,6 +60,8 @@
         "hash_map": "cpp",
         "deque": "cpp",
         "list": "cpp",
-        "numeric": "cpp"
+        "numeric": "cpp",
+        "*.ipp": "cpp",
+        "condition_variable": "cpp"
     }
 }
