@@ -42,6 +42,18 @@ extern "C"
 #include <vel_saltis_services/srv/get_imu_cfg.hpp>
 #include <vel_saltis_services/srv/set_imu_cfg.hpp>
 
+#include <vel_saltis_services/srv/get_fusion_cfg.hpp>
+#include <vel_saltis_services/srv/set_fusion_cfg.hpp>
+
+#include <vel_saltis_services/srv/get_pidcfg.hpp>
+#include <vel_saltis_services/srv/set_pidcfg.hpp>
+
+#include <vel_saltis_services/srv/get_servo_cfg.hpp>
+#include <vel_saltis_services/srv/set_servo_cfg.hpp>
+
+#include <vel_saltis_services/srv/get_motor_cfg.hpp>
+#include <vel_saltis_services/srv/set_motor_cfg.hpp>
+
 #include <kapibara_vel_saltis_bridge/event.hpp>
 #include <kapibara_vel_saltis_bridge/event_buffered.hpp>
 
@@ -117,7 +129,7 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                     const ping_msg_t* ping = frame->to<ping_msg_t>();
 
                     // std::cout<<"Ping: "<<ping->msg[0]<<ping->msg[1]<<std::endl;
-
+ 
                     if( ping->msg[0]=='H' && ping->msg[1]=='I' )
                     {
                         auto _ping = kapibara_interfaces::msg::CanPing();
@@ -215,6 +227,8 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                 {
                     const ack_msg_t* enc = frame->to<ack_msg_t>();
 
+                    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Got ACK! %x %x",enc->msg[0],enc->msg[1]);
+
                     ack_event.notify(*enc);
                 }
             break;
@@ -251,6 +265,10 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get imu configuration timeouted!");
     }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with IMU config request!");   
+    }
 
     uint8_t* buff_cfg = (uint8_t*)&cfg;
 
@@ -266,6 +284,75 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     response->config.gyroscope_offset.x = cfg.gyroscope_offset.x;
     response->config.gyroscope_offset.y = cfg.gyroscope_offset.y;
     response->config.gyroscope_offset.z = cfg.gyroscope_offset.z;
+}
+
+void set_fusion_cfg(std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    fusion_cfg_t cfg;
+
+    cfg.beta = request->config.beta;
+
+    // send configuration to board
+    can.send((uint8_t*)&cfg,sizeof(fusion_cfg_t),VEL_SALTIS_ID,id);
+
+    // wait for ack from can bus, for about 60 seconds
+    ack_msg_t msg;
+
+    bool ok = ack_event.wait_for(msg,60);
+    
+    if( ok )
+    {
+        response->ok = msg.msg[0] == 'F' && msg.msg[1] == 'U';
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Vel Saltis couldn't get ACK in time!");
+        response->ok = false;
+    }
+
+}
+
+
+void get_fusion_cfg(std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    can.set_recive_size(sizeof(fusion_cfg_t));
+
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with Fusion config request!");
+    // send request
+    can.send_id(VEL_SALTIS_ID,id);
+
+    // wait for response from can bus, for about 60 seconds
+    fusion_cfg_t cfg = {0};
+
+    if(!cfg_event.wait_for(60))
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get Fusion configuration timeouted!");
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with Fusion config request!");   
+    }
+
+    uint8_t* buff_cfg = (uint8_t*)&cfg;
+
+    for(size_t i=0;i<sizeof(fusion_cfg_t);++i)
+    {
+        buff_cfg[i] = cfg_event[i];
+    }
+
+    response->config.beta = cfg;
 }
 
 void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> request,
@@ -306,6 +393,233 @@ std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Response> response)
 
 }
 
+void set_pid_cfg(std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    pid_cfg_t cfg;
+
+    cfg.pid_left.p = request->config.left.p;
+    cfg.pid_left.i = request->config.left.i;
+    cfg.pid_left.d = request->config.left.d;
+
+    cfg.pid_right.p = request->config.right.p;
+    cfg.pid_right.i = request->config.right.i ;
+    cfg.pid_right.d = request->config.right.d;
+
+    cfg.open = request->config.open;
+
+    // send configuration to board
+    can.send((uint8_t*)&cfg,sizeof(pid_cfg_t),VEL_SALTIS_ID,id);
+
+    // wait for ack from can bus, for about 60 seconds
+    ack_msg_t msg;
+
+    bool ok = ack_event.wait_for(msg,60);
+    
+    if( ok )
+    {
+        response->ok = msg.msg[0] == 'P' && msg.msg[1] == 'U';
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Vel Saltis couldn't get ACK in time!");
+        response->ok = false;
+    }
+
+}
+
+
+void get_pid_cfg(std::shared_ptr<vel_saltis_services::srv::GetPIDCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    can.set_recive_size(sizeof(pid_cfg_t));
+
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with PID config request!");
+    // send request
+    can.send_id(VEL_SALTIS_ID,id);
+
+    // wait for response from can bus, for about 60 seconds
+    pid_cfg_t cfg = {0};
+
+    if(!cfg_event.wait_for(60))
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get PID configuration timeouted!");
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with PID config request!");   
+    }
+
+    uint8_t* buff_cfg = (uint8_t*)&cfg;
+
+    for(size_t i=0;i<sizeof(pid_cfg_t);++i)
+    {
+        buff_cfg[i] = cfg_event[i];
+    }
+
+    response->config.left.p = cfg.pid_left.p;
+    response->config.left.i = cfg.pid_left.i;
+    response->config.left.d = cfg.pid_left.d;
+
+    response->config.right.p = cfg.pid_right.p;
+    response->config.right.i = cfg.pid_right.i;
+    response->config.right.d = cfg.pid_right.d;
+
+    response->config.open = cfg.open;
+}
+
+void set_servo_cfg(std::shared_ptr<vel_saltis_services::srv::SetServoCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::SetServoCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    servo_cfg_t cfg;
+
+    cfg.angel[0] = request->config.angel_left;
+    cfg.angel[1] = request->config.angel_right;
+
+    // send configuration to board
+    can.send((uint8_t*)&cfg,sizeof(servo_cfg_t),VEL_SALTIS_ID,id);
+
+    // wait for ack from can bus, for about 60 seconds
+    ack_msg_t msg;
+
+    bool ok = ack_event.wait_for(msg,60);
+    
+    if( ok )
+    {
+        response->ok = msg.msg[0] == 'S' && msg.msg[1] == 'U';
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Vel Saltis couldn't get ACK in time!");
+        response->ok = false;
+    }
+
+}
+
+
+void get_servo_cfg(std::shared_ptr<vel_saltis_services::srv::GetServoCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::GetServoCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    can.set_recive_size(sizeof(servo_cfg_t));
+
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with Servo config request!");
+    // send request
+    can.send_id(VEL_SALTIS_ID,id);
+
+    // wait for response from can bus, for about 60 seconds
+    servo_cfg_t cfg = {0};
+
+    if(!cfg_event.wait_for(60))
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get Servo configuration timeouted!");
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with Servo config request!");   
+    }
+
+    uint8_t* buff_cfg = (uint8_t*)&cfg;
+
+    for(size_t i=0;i<sizeof(servo_cfg_t);++i)
+    {
+        buff_cfg[i] = cfg_event[i];
+    }
+
+    response->config.angel_left = cfg.angel[0];
+    response->config.angel_right = cfg.angel[1];
+}
+
+void set_motor_cfg(std::shared_ptr<vel_saltis_services::srv::SetMotorCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::SetMotorCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    motor_cfg_t cfg;
+
+    cfg.velocities[0] = request->config.velocities_left;
+    cfg.velocities[1] = request->config.velocities_right;
+
+    // send configuration to board
+    can.send((uint8_t*)&cfg,sizeof(motor_cfg_t),VEL_SALTIS_ID,id);
+
+    // wait for ack from can bus, for about 60 seconds
+    ack_msg_t msg;
+
+    bool ok = ack_event.wait_for(msg,60);
+    
+    if( ok )
+    {
+        response->ok = msg.msg[0] == 'M' && msg.msg[1] == 'U';
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Vel Saltis couldn't get ACK in time!");
+        response->ok = false;
+    }
+
+}
+
+
+void get_motor_cfg(std::shared_ptr<vel_saltis_services::srv::GetMotorCFG::Request> request,
+std::shared_ptr<vel_saltis_services::srv::GetMotorCFG::Response> response)
+{
+    // send request to get imu config through CAN Bus
+
+    // imu id
+    uint8_t id = 0;
+
+    can.set_recive_size(sizeof(motor_cfg_t));
+
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with Motor config request!");
+    // send request
+    can.send_id(VEL_SALTIS_ID,id);
+
+    // wait for response from can bus, for about 60 seconds
+    motor_cfg_t cfg = {0};
+
+    if(!cfg_event.wait_for(60))
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"Vel Saltis get Motor configuration timeouted!");
+    }
+    else
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with Motor config request!");   
+    }
+
+    uint8_t* buff_cfg = (uint8_t*)&cfg;
+
+    for(size_t i=0;i<sizeof(servo_cfg_t);++i)
+    {
+        buff_cfg[i] = cfg_event[i];
+    }
+
+    response->config.velocities_left = cfg.velocities[0];
+    response->config.velocities_right = cfg.velocities[1];
+}
+
 
 int main(int argc, char const *argv[])
 {
@@ -326,6 +640,18 @@ int main(int argc, char const *argv[])
 
     rclcpp::Service<vel_saltis_services::srv::SetImuCFG>::SharedPtr set_imu_srv = node->create_service<vel_saltis_services::srv::SetImuCFG>("set_imu_cfg",&set_imu_cfg);
     rclcpp::Service<vel_saltis_services::srv::GetImuCFG>::SharedPtr get_imu_srv = node->create_service<vel_saltis_services::srv::GetImuCFG>("get_imu_cfg",&get_imu_cfg);
+
+    rclcpp::Service<vel_saltis_services::srv::SetFusionCFG>::SharedPtr set_fusion_srv = node->create_service<vel_saltis_services::srv::SetFusionCFG>("set_fusion_cfg",&set_fusion_cfg);
+    rclcpp::Service<vel_saltis_services::srv::GetFusionCFG>::SharedPtr get_fusion_srv = node->create_service<vel_saltis_services::srv::GetFusionCFG>("get_fusion_cfg",&get_fusion_cfg);
+
+    rclcpp::Service<vel_saltis_services::srv::SetPIDCFG>::SharedPtr set_pid_srv = node->create_service<vel_saltis_services::srv::SetPIDCFG>("set_pid_cfg",&set_pid_cfg);
+    rclcpp::Service<vel_saltis_services::srv::GetPIDCFG>::SharedPtr get_pid_srv = node->create_service<vel_saltis_services::srv::GetPIDCFG>("get_pid_cfg",&get_pid_cfg);
+
+    rclcpp::Service<vel_saltis_services::srv::SetServoCFG>::SharedPtr set_servo_srv = node->create_service<vel_saltis_services::srv::SetServoCFG>("set_servo_cfg",&set_servo_cfg);
+    rclcpp::Service<vel_saltis_services::srv::GetServoCFG>::SharedPtr get_servo_srv = node->create_service<vel_saltis_services::srv::GetServoCFG>("get_servo_cfg",&get_servo_cfg);
+
+    rclcpp::Service<vel_saltis_services::srv::SetMotorCFG>::SharedPtr set_motor_srv = node->create_service<vel_saltis_services::srv::SetMotorCFG>("set_motor_cfg",&set_motor_cfg);
+    rclcpp::Service<vel_saltis_services::srv::GetMotorCFG>::SharedPtr get_motor_srv = node->create_service<vel_saltis_services::srv::GetMotorCFG>("get_motor_cfg",&get_motor_cfg);
 
     std::thread can_thread(can_task,node,node->tofCount());
     

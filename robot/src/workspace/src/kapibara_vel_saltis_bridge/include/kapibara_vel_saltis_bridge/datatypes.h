@@ -28,7 +28,7 @@ typedef struct aux_cfg
 
 typedef struct motor_cfg
 {
-    int32_t velocities[2];
+    int16_t velocities[2];
 } motor_cfg_t ;
 
 typedef struct servo_cfg

@@ -1,2 +1,2 @@
-int32 velocities_left
-int32 velocities_right
+int16 velocities_left
+int16 velocities_right

@@ -1,8 +1,6 @@
 #!/bin/bash
 clear
 
-xhost local:docker
-
 arg=$1
 
 
