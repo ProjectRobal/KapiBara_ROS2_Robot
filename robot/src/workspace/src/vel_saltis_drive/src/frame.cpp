@@ -11,7 +11,7 @@ CanFrame::CanFrame(uint32_t packet_size,packet_type_t type)
 
 void CanFrame::read(const uint8_t* data,uint16_t size,uint16_t offset)
     {
-        if(this->ready())
+        if( this->ready() || offset == 0 )
         {
             this->size = 0;
         }

@@ -108,6 +108,8 @@ typedef struct encoder
     int32_t speed_right;
     int32_t distance_left;
     int32_t distance_right;
+    int32_t raw_left;
+    int32_t raw_right;
 } encoder_t ;
 
 #pragma GCC pop_options

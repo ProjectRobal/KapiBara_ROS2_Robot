@@ -1,0 +1,3 @@
+./run.sh run /app/cmd/run_cmd.sh ros2 service call /set_imu_cfg vel_saltis_services/srv/SetImuCFG "{config: { gyroscope_offset: { x: 1.0, y: 1.0, z: 1.0}, accelerometer_offset: { x: 1.0, y: 1.0, z: 1.0 } } }"
+
+./run.sh run /app/cmd/run_cmd.sh ros2 service call /enable_boards modus_board_interfaces/EnableBoards "{ enable: true}"

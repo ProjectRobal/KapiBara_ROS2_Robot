@@ -207,6 +207,9 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                     _encoders.speed_left = enc->speed_left;
                     _encoders.speed_right = enc->speed_right;
 
+                    _encoders.raw_left = enc->raw_left;
+                    _encoders.raw_right = enc->raw_right;
+
                     encoders_publisher->publish(_encoders);
                 }
             break;
@@ -292,7 +295,7 @@ std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 5;
 
     fusion_cfg_t cfg;
 
@@ -325,7 +328,7 @@ std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 5;
 
     can.set_recive_size(sizeof(fusion_cfg_t));
 
@@ -352,7 +355,7 @@ std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
         buff_cfg[i] = cfg_event[i];
     }
 
-    response->config.beta = cfg;
+    response->config.beta = cfg.beta;
 }
 
 void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> request,
@@ -399,7 +402,7 @@ std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 2;
 
     pid_cfg_t cfg;
 
@@ -435,14 +438,15 @@ std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Response> response)
 
 
 void get_pid_cfg(std::shared_ptr<vel_saltis_services::srv::GetPIDCFG::Request> request,
-std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
+std::shared_ptr<vel_saltis_services::srv::GetPIDCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 2;
 
-    can.set_recive_size(sizeof(pid_cfg_t));
+    // can.set_recive_size(sizeof(pid_cfg_t));
+    can.set_recive_size(25);
 
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Sending id with PID config request!");
     // send request
@@ -484,7 +488,7 @@ std::shared_ptr<vel_saltis_services::srv::SetServoCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 3;
 
     servo_cfg_t cfg;
 
@@ -518,7 +522,7 @@ std::shared_ptr<vel_saltis_services::srv::GetServoCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 3;
 
     can.set_recive_size(sizeof(servo_cfg_t));
 
@@ -555,7 +559,7 @@ std::shared_ptr<vel_saltis_services::srv::SetMotorCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 4;
 
     motor_cfg_t cfg;
 
@@ -589,7 +593,7 @@ std::shared_ptr<vel_saltis_services::srv::GetMotorCFG::Response> response)
     // send request to get imu config through CAN Bus
 
     // imu id
-    uint8_t id = 0;
+    uint8_t id = 4;
 
     can.set_recive_size(sizeof(motor_cfg_t));
 

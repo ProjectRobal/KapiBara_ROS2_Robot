@@ -62,6 +62,9 @@
         "list": "cpp",
         "numeric": "cpp",
         "*.ipp": "cpp",
-        "condition_variable": "cpp"
+        "condition_variable": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "regex": "cpp"
     }
 }

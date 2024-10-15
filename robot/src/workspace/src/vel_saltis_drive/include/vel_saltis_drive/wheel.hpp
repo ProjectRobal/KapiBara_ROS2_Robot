@@ -39,7 +39,7 @@ namespace vel_saltis_drive
         void setup(const std::string& name,const uint32_t EncoderResolution)
         {
             this->name=name;
-            this->EncoderToAngelRatio=(2*M_PI)/EncoderResolution;
+            this->EncoderToAngelRatio=static_cast<double>(EncoderResolution)/(2*M_PI);
             
             this->cmd=0;
         }
