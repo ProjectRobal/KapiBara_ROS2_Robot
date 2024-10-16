@@ -31,11 +31,11 @@ class ResetBoardsService(Node):
 
     def reset_board_callback(self, request, response):
         
-        self.reset_pin.set_line(1)        
+        self.reset_pin.set_value(1)        
         
         time.sleep(10)
         
-        self.reset_pin.set_line(0) 
+        self.reset_pin.set_value(0) 
         
         response.ok = not bool(self.reset_pin.get_value())
 

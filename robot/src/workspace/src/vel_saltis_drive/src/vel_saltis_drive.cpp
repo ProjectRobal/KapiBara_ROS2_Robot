@@ -1,4 +1,5 @@
 #include <thread>
+#include <unistd.h>
 
 #include "pluginlib/class_list_macros.hpp"
 #include "vel_saltis_drive/vel_saltis_drive.hpp"
@@ -9,6 +10,9 @@
 #include "vel_saltis_drive/can_msg.hpp"
 
 #include "vel_saltis_drive/frame.hpp"
+
+#include "kapibara_interfaces/msg/encoders_and_speed.hpp"
+
 
 namespace vel_saltis_drive
 {
@@ -72,7 +76,11 @@ namespace vel_saltis_drive
             return hardware_interface::CallbackReturn::FAILURE;
         }
 
-        this->can_task = std::thread([this](){this->read_from_can();});
+        this->_node = std::make_shared<rclcpp::Node>("encoder_client");
+
+        this->encoder_sub = this->_node->create_subscription<kapibara_interfaces::msg::EncodersAndSpeed>("/encoders", 10, std::bind(&VelSaltisDrive::encoder_callback, this, std::placeholders::_1));
+
+        // this->can_task = std::thread([this](){this->read_from_can();});
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -155,7 +163,9 @@ namespace vel_saltis_drive
 
     hardware_interface::return_type VelSaltisDrive::read(const rclcpp::Time &time, const rclcpp::Duration &period)
     {
-        this->can_mux.lock();
+        RCLCPP_DEBUG(rclcpp::get_logger("VelSaltisDrive"), "Reading from encoders!");
+
+        rclcpp::spin_some(this->_node);
 
         // read wheel distance and speed from board
 
@@ -165,7 +175,9 @@ namespace vel_saltis_drive
         this->w_left.position = speed.distance_left / this->w_left.EncoderToAngelRatio;
         this->w_right.position = speed.distance_right / this->w_right.EncoderToAngelRatio;
 
-        this->can_mux.unlock();
+        RCLCPP_DEBUG(rclcpp::get_logger("VelSaltisDrive"), "Got speed %i %i %i %i",this->speed.speed_left,this->speed.speed_right,this->speed.distance_left,this->speed.distance_right);
+
+        // this->can_mux.unlock();
 
         return hardware_interface::return_type::OK;
     }
@@ -174,6 +186,8 @@ namespace vel_saltis_drive
     {
 
         // update pwm according to cmd value
+
+        RCLCPP_DEBUG(rclcpp::get_logger("VelSaltisDrive"), "Sending motor data!");
 
         //RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"), "CMD Left value: %f", this->w_left.cmd);
         //RCLCPP_INFO(rclcpp::get_logger("VelSaltisDrive"), "CMD Right value: %f", this->w_right.cmd);

@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python3
 
 import sys
 
@@ -37,36 +37,36 @@ class StartSequence(Node):
         
         self.reset = self.create_client(ResetBoards, 'reset_boards')
         
-        if not self.reset.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Reset Boards service not available, waiting again...')
+        if not self.reset.wait_for_service(timeout_sec=60.0):
+            self.get_logger().info('Reset Boards service not available, waiting again!!!')
             self.failed = True
             return
             
         self.enable = self.create_client(EnableBoards, 'enable_boards')
         
-        if not self.enable.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Enable Boards service not available, waiting again...')
+        if not self.enable.wait_for_service(timeout_sec=60.0):
+            self.get_logger().info('Enable Boards service not available, waiting again!!!')
             self.failed = True
             return
         
-        self.imu_cfg = self.create_client(SetImuCFG, 'set_imu_config')
+        self.imu_cfg = self.create_client(SetImuCFG, 'set_imu_cfg')
         
-        if not self.imu_cfg.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Set IMU config service not available, waiting again...')
+        if not self.imu_cfg.wait_for_service(timeout_sec=60.0):
+            self.get_logger().info('Set IMU config service not available, waiting again!!!')
             self.failed = True
             return
         
-        self.fusion_cfg = self.create_client(SetFusionCFG, 'set_fusion_config')
+        self.fusion_cfg = self.create_client(SetFusionCFG, 'set_fusion_cfg')
         
-        if not self.fusion_cfg.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Set Fusion config service not available, waiting again...')
+        if not self.fusion_cfg.wait_for_service(timeout_sec=60.0):
+            self.get_logger().info('Set Fusion config service not available!!!')
             self.failed = True
             return
         
-        self.pid_cfg = self.create_client(SetPIDCFG, 'set_fusion_config')
+        self.pid_cfg = self.create_client(SetPIDCFG, 'set_pid_cfg')
         
-        if not self.pid_cfg.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Set PID config service not available, waiting again...')
+        if not self.pid_cfg.wait_for_service(timeout_sec=60.0):
+            self.get_logger().info('Set PID config service not available!!!')
             self.failed = True
             return
 
@@ -83,25 +83,28 @@ class StartSequence(Node):
         
         self.future = self.enable.call_async(req)
         rclpy.spin_until_future_complete(self, self.future)
-        return self.future.result()
+        return self.future.result().enabled
     
     
     def set_imu_config(self):
         req = SetImuCFG.Request()
         
         try:
-            
-            cfg = json.load(self.imu_cfg_path)
+            with open(self.imu_cfg_path,"r") as file:
+                cfg = json.load(file)
 
-            req.config.gyroscope_offset.x = cfg["gyroscope"]["x"]
-            req.config.gyroscope_offset.y = cfg["gyroscope"]["y"]
-            req.config.gyroscope_offset.z = cfg["gyroscope"]["z"]
-            
-            req.config.accelerometer_offset.x = cfg["accelerometer"]["x"]
-            req.config.accelerometer_offset.y = cfg["accelerometer"]["y"]
-            req.config.accelerometer_offset.z = cfg["accelerometer"]["z"]
+                req.config.gyroscope_offset.x = cfg["gyroscope"]["x"]
+                req.config.gyroscope_offset.y = cfg["gyroscope"]["y"]
+                req.config.gyroscope_offset.z = cfg["gyroscope"]["z"]
+                
+                req.config.accelerometer_offset.x = cfg["accelerometer"]["x"]
+                req.config.accelerometer_offset.y = cfg["accelerometer"]["y"]
+                req.config.accelerometer_offset.z = cfg["accelerometer"]["z"]
             
         except json.JSONDecodeError:
+            self.get_logger().error('Cannot decode IMU config json')
+            return False
+        except FileNotFoundError:
             self.get_logger().error('Cannot load IMU config json')
             return False
         except KeyError:
@@ -116,20 +119,23 @@ class StartSequence(Node):
         req = SetPIDCFG.Request()
         
         try:
-            
-            cfg = json.load(self.pid_cfg_path)
+            with open(self.pid_cfg_path,"r") as file:
+                cfg = json.load(file)
 
-            req.config.left.p = cfg["left"]["p"]
-            req.config.left.i = cfg["left"]["i"]
-            req.config.left.d = cfg["left"]["d"]
-            
-            req.config.right.p = cfg["right"]["p"]
-            req.config.right.i = cfg["right"]["i"]
-            req.config.right.d = cfg["right"]["d"]
-            
-            req.config.open = int(cfg["open"])
+                req.config.left.p = cfg["left"]["p"]
+                req.config.left.i = cfg["left"]["i"]
+                req.config.left.d = cfg["left"]["d"]
+                
+                req.config.right.p = cfg["right"]["p"]
+                req.config.right.i = cfg["right"]["i"]
+                req.config.right.d = cfg["right"]["d"]
+                
+                req.config.open = int(cfg["open"])
             
         except json.JSONDecodeError:
+            self.get_logger().error('Cannot decode PID config json')
+            return False
+        except FileNotFoundError:
             self.get_logger().error('Cannot load PID config json')
             return False
         except KeyError:
@@ -144,12 +150,15 @@ class StartSequence(Node):
         req = SetFusionCFG.Request()
         
         try:
-            
-            cfg = json.load(self.fusion_cfg_path)
+            with open(self.fusion_cfg_path,"r") as file:
+                cfg = json.load(file)
 
-            req.config.beta = cfg["beta"]
+                req.config.beta = cfg["beta"]
 
         except json.JSONDecodeError:
+            self.get_logger().error('Cannot decode Fusion config json')
+            return False
+        except FileNotFoundError:
             self.get_logger().error('Cannot load Fusion config json')
             return False
         except KeyError:
@@ -166,13 +175,19 @@ def main(args=None):
 
     start = StartSequence()
     
+    start.get_logger().info('Start sequence begin')
+    
     if start.failed:
         start.destroy_node()
         rclpy.shutdown()
         return
     
     start.get_logger().info('1.Disabling boards')
-    response = start.enable_boards(False)
+    if start.enable_boards(False):
+        start.get_logger().info("Board hasen't been disabled")
+        start.destroy_node()
+        rclpy.shutdown()
+        return
     
     start.get_logger().info('2.Reseting boards')
     start.reset_boards()
@@ -197,7 +212,13 @@ def main(args=None):
         start.get_logger().error('Generl error: '+str(e))
     
     start.get_logger().info('6.Enabling boards')
-    response = start.enable_boards(True)
+    if not start.enable_boards(True):
+        start.get_logger().info("Board hasen't been enabled")
+        start.destroy_node()
+        rclpy.shutdown()
+        return
+    
+    start.get_logger().info('Start sequence end')
     
     start.destroy_node()
     rclpy.shutdown()

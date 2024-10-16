@@ -42,6 +42,7 @@ const CanFrame* CANBridge::recive()
 
         if (nbytes < 0) {
             std::cerr<<"Nothing to read from CAN!"<<std::endl;
+            return NULL;
         }
 
         if(frame.can_dlc<=3)

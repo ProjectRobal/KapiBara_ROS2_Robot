@@ -4,6 +4,7 @@
 #include <vector>
 #include <chrono>
 #include <mutex>
+#include <memory>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/node.hpp"
@@ -20,6 +21,8 @@
 #include "rclcpp/time.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+
+#include "kapibara_interfaces/msg/encoders_and_speed.hpp"
 
 #include "can_msg.hpp"
 
@@ -71,6 +74,10 @@ namespace vel_saltis_drive
 
         CANBridge can;
 
+        std::shared_ptr<rclcpp::Node> _node;
+
+        rclcpp::Subscription<kapibara_interfaces::msg::EncodersAndSpeed>::SharedPtr encoder_sub;
+
         std::mutex can_mux;
 
         bool can_run;
@@ -89,6 +96,15 @@ namespace vel_saltis_drive
             uint8_t* buff = (uint8_t*)&motors;
 
             this->can.send(buff,sizeof(motors),VEL_SALTIS_ID,4);
+        }
+
+        void encoder_callback(const kapibara_interfaces::msg::EncodersAndSpeed::SharedPtr msg)
+        {
+            this->speed.speed_left = msg->speed_left;
+            this->speed.speed_right = msg->speed_right;
+
+            this->speed.distance_left = msg->distance_left;
+            this->speed.distance_right = msg->distance_right;
         }
 
     };
