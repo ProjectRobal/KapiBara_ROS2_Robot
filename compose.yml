@@ -1,8 +1,5 @@
 version: '3.9'
 
-networks:
-  internet:
-    driver: bridge
 
 services:
   robot:
@@ -16,7 +13,6 @@ services:
     build:
       dockerfile: ./Dockerfile
       context: ./robot
-      privileged: true
     env_file:
       - ./robot/env/env
     environment:
@@ -53,4 +49,4 @@ services:
     group_add:
       - video
       - dialout
-      - 993
+      # - 993

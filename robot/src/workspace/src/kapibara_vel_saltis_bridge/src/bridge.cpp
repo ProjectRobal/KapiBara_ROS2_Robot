@@ -86,9 +86,32 @@ private:
 
 CANBridge can;
 
+std::mutex ack_filter_mux;
+char ack_filter[2] = {0};
+
 Event<ack_msg_t> ack_event;
 
 EventBuffered<CONFIG_MAX_BUFFER_SIZE> cfg_event;
+
+void set_ack_filter(char a,char b)
+{
+    ack_filter_mux.lock();
+
+    ack_filter[0] = a;
+    ack_filter[1] = b;
+
+    ack_filter_mux.unlock();
+}
+
+void clear_ack_filter()
+{
+    ack_filter_mux.lock();
+
+    ack_filter[0] = 0;
+    ack_filter[1] = 0;
+
+    ack_filter_mux.unlock();
+}
 
 
 // sepeare task for can reciving
@@ -230,9 +253,19 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                 {
                     const ack_msg_t* enc = frame->to<ack_msg_t>();
 
-                    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"Got ACK! %x %x",enc->msg[0],enc->msg[1]);
+                    ack_filter_mux.lock();
 
-                    ack_event.notify(*enc);
+                    if( ack_filter[0] == enc->msg[0] && ack_filter[1] == enc->msg[1] )
+                    {
+                        RCLCPP_DEBUG(rclcpp::get_logger("rclcpp"),"Got ACK! %x %x",enc->msg[0],enc->msg[1]);
+
+                        ack_event.notify(*enc);
+
+                        ack_filter[0] = 0;
+                        ack_filter[1] = 0;
+                    }
+
+                    ack_filter_mux.unlock();
                 }
             break;
 
@@ -300,6 +333,8 @@ std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
     fusion_cfg_t cfg;
 
     cfg.beta = request->config.beta;
+
+    set_ack_filter('F','U');
 
     // send configuration to board
     can.send((uint8_t*)&cfg,sizeof(fusion_cfg_t),VEL_SALTIS_ID,id);
@@ -376,6 +411,8 @@ std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Response> response)
     cfg.gyroscope_offset.y = request->config.gyroscope_offset.y;
     cfg.gyroscope_offset.z = request->config.gyroscope_offset.z;
 
+    set_ack_filter('I','U');
+
     // send configuration to board
     can.send((uint8_t*)&cfg,sizeof(imu_cfg_t),VEL_SALTIS_ID,id);
 
@@ -415,6 +452,8 @@ std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Response> response)
     cfg.pid_right.d = request->config.right.d;
 
     cfg.open = request->config.open;
+
+    set_ack_filter('P','U');
 
     // send configuration to board
     can.send((uint8_t*)&cfg,sizeof(pid_cfg_t),VEL_SALTIS_ID,id);
@@ -495,6 +534,8 @@ std::shared_ptr<vel_saltis_services::srv::SetServoCFG::Response> response)
     cfg.angel[0] = request->config.angel_left;
     cfg.angel[1] = request->config.angel_right;
 
+    set_ack_filter('S','U');
+
     // send configuration to board
     can.send((uint8_t*)&cfg,sizeof(servo_cfg_t),VEL_SALTIS_ID,id);
 
@@ -565,6 +606,8 @@ std::shared_ptr<vel_saltis_services::srv::SetMotorCFG::Response> response)
 
     cfg.velocities[0] = request->config.velocities_left;
     cfg.velocities[1] = request->config.velocities_right;
+
+    set_ack_filter('M','U');
 
     // send configuration to board
     can.send((uint8_t*)&cfg,sizeof(motor_cfg_t),VEL_SALTIS_ID,id);

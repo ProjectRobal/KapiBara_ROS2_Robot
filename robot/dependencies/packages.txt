@@ -9,3 +9,7 @@ ros-iron-controller-manager
 ros-iron-rqt-image-view
 ros-iron-image-transport-plugins
 ros-iron-compressed-image-transport
+ros-iron-ros2-control
+ros-iron-hardware-interface
+ros-iron-controller-manager
+ros-iron-ros2-controllers

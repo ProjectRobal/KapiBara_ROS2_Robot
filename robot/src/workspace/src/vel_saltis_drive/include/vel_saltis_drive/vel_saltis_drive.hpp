@@ -1,5 +1,4 @@
-#ifndef TB6612_DRIVE_HH
-#define TB6612_DRIVE_HH
+#pragma once
 
 #include <cstring>
 #include <vector>
@@ -94,5 +93,3 @@ namespace vel_saltis_drive
 
     };
 }
-
-#endif

@@ -38,7 +38,7 @@ target_include_directories(
   include
 )
 ament_target_dependencies(
-  vel_saltis_drive
+  vel_saltis_drive PUBLIC
   hardware_interface
   controller_manager
   rclcpp

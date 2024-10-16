@@ -56,7 +56,11 @@ namespace vel_saltis_drive
 
 
         this->cfg.loop_rate = std::stof(info_.hardware_parameters["loop_rate"]);
-        this->cfg.encoder_resolution = std::stoi(info_.hardware_parameters["encoder_resolution"]);
+        
+        if( info_.hardware_parameters.count("encoder_resolution") > 0 )
+        {
+            this->cfg.encoder_resolution = std::stoi(info_.hardware_parameters["encoder_resolution"]);
+        }
 
         this->w_left.setup(this->cfg.left_wheel_name,this->cfg.encoder_resolution);
         this->w_right.setup(this->cfg.right_wheel_name,this->cfg.encoder_resolution);
