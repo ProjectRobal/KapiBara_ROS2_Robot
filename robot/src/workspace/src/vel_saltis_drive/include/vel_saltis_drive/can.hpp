@@ -44,7 +44,7 @@ class CANBridge
         this->frames[Encoder] = CanFrame(sizeof(speed_msg_t),Encoder);
     }
 
-    bool start(const char* can_name,uint32_t id=VEL_SALTIS_ID,uint32_t mask=0xF);
+    bool start(const char* can_name,uint32_t id=VEL_SALTIS_RX_ID,uint32_t mask=0xF);
 
     /*
         data - data to send
