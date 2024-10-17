@@ -91,7 +91,7 @@ namespace vel_saltis_drive
 
         void read_from_can();
 
-        void send_motor_msg(int16_t speed_left,int16_t speed_right)
+        void send_motor_msg(int32_t speed_left,int32_t speed_right)
         {
             motor_msg_t motors = {
                 .speed_left = speed_left,

@@ -9,8 +9,8 @@ enum packet_type_t
 
 struct motor_msg_t
 {
-    int16_t speed_left;
-    int16_t speed_right;
+    int32_t speed_left;
+    int32_t speed_right;
 };
 
 struct servo_msg_t

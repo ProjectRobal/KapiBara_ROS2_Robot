@@ -89,6 +89,8 @@ CANBridge can;
 std::mutex ack_filter_mux;
 char ack_filter[2] = {0};
 
+std::mutex service_lock_mux;
+
 Event<ack_msg_t> ack_event;
 
 EventBuffered<CONFIG_MAX_BUFFER_SIZE> cfg_event;
@@ -285,6 +287,8 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
 
+    std::lock_guard<std::mutex> guard(service_lock_mux);
+
     // imu id
     uint8_t id = 0;
 
@@ -320,12 +324,16 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     response->config.gyroscope_offset.x = cfg.gyroscope_offset.x;
     response->config.gyroscope_offset.y = cfg.gyroscope_offset.y;
     response->config.gyroscope_offset.z = cfg.gyroscope_offset.z;
+
+    service_lock_mux.unlock();
 }
 
 void set_fusion_cfg(std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Request> request,
 std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 5;
@@ -362,6 +370,8 @@ std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
 
+    std::lock_guard<std::mutex> guard(service_lock_mux);
+
     // imu id
     uint8_t id = 5;
 
@@ -397,6 +407,8 @@ void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> r
 std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 0;
@@ -437,6 +449,8 @@ void set_pid_cfg(std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Request> r
 std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 2;
@@ -480,6 +494,8 @@ void get_pid_cfg(std::shared_ptr<vel_saltis_services::srv::GetPIDCFG::Request> r
 std::shared_ptr<vel_saltis_services::srv::GetPIDCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 2;
@@ -526,6 +542,8 @@ std::shared_ptr<vel_saltis_services::srv::SetServoCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
 
+    std::lock_guard<std::mutex> guard(service_lock_mux);
+
     // imu id
     uint8_t id = 3;
 
@@ -561,6 +579,8 @@ void get_servo_cfg(std::shared_ptr<vel_saltis_services::srv::GetServoCFG::Reques
 std::shared_ptr<vel_saltis_services::srv::GetServoCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 3;
@@ -598,6 +618,7 @@ void set_motor_cfg(std::shared_ptr<vel_saltis_services::srv::SetMotorCFG::Reques
 std::shared_ptr<vel_saltis_services::srv::SetMotorCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 4;
@@ -634,6 +655,8 @@ void get_motor_cfg(std::shared_ptr<vel_saltis_services::srv::GetMotorCFG::Reques
 std::shared_ptr<vel_saltis_services::srv::GetMotorCFG::Response> response)
 {
     // send request to get imu config through CAN Bus
+
+    std::lock_guard<std::mutex> guard(service_lock_mux);
 
     // imu id
     uint8_t id = 4;

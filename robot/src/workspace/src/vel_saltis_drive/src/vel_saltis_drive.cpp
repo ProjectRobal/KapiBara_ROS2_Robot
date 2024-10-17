@@ -206,8 +206,8 @@ namespace vel_saltis_drive
         // double left_target_vel=this->w_left.targetVelocity()/this->cfg.loop_rate;
         // double right_target_vel=this->w_right.targetVelocity()/this->cfg.loop_rate;
 
-        int16_t left_target_vel = this->w_left.cmd*this->w_left.EncoderToAngelRatio;
-        int16_t right_target_vel = this->w_right.cmd*this->w_right.EncoderToAngelRatio;
+        int32_t left_target_vel = this->w_left.cmd*this->w_left.EncoderToAngelRatio;
+        int32_t right_target_vel = this->w_right.cmd*this->w_right.EncoderToAngelRatio;
 
         this->send_motor_msg(left_target_vel,right_target_vel);
 
