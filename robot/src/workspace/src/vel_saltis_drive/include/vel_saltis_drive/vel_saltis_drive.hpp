@@ -34,6 +34,8 @@
 
 #include "can.hpp"
 
+#include "servo.hpp"
+
 
 namespace vel_saltis_drive
 {
@@ -72,6 +74,9 @@ namespace vel_saltis_drive
 
         speed_msg_t speed;
 
+        Servo left_servo;
+        Servo right_servo;
+
         CANBridge can;
 
         std::shared_ptr<rclcpp::Node> _node;
@@ -95,7 +100,19 @@ namespace vel_saltis_drive
 
             uint8_t* buff = (uint8_t*)&motors;
 
-            this->can.send(buff,sizeof(motors),VEL_SALTIS_ID,4);
+            this->can.send(buff,sizeof(motors),VEL_SALTIS_ID,MOTOR_ID);
+        }
+
+        void send_servo_msg()
+        {
+            servo_msg_t servos = {
+                .left = static_cast<uint8_t>(this->left_servo.getAngle()),
+                .right = static_cast<uint8_t>(this->right_servo.getAngle())
+            };
+
+            uint8_t* buff = (uint8_t*)&servos;
+
+            this->can.send(buff,sizeof(servos),VEL_SALTIS_ID,SERVOS_ID);
         }
 
         void encoder_callback(const kapibara_interfaces::msg::EncodersAndSpeed::SharedPtr msg)

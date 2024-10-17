@@ -112,8 +112,8 @@ class StartSequence(Node):
             return False
         
         self.future = self.imu_cfg.call_async(req)
-        rclpy.spin_until_future_complete(self, self.future,timeout_sec=20)
-        return self.future.result().ok
+        rclpy.spin_until_future_complete(self, self.future,timeout_sec=60)
+        return self.future.result()
     
     def set_pid_config(self):
         req = SetPIDCFG.Request()
@@ -143,8 +143,8 @@ class StartSequence(Node):
             return False
         
         self.future = self.pid_cfg.call_async(req)
-        rclpy.spin_until_future_complete(self, self.future,timeout_sec=20)
-        return self.future.result().ok
+        rclpy.spin_until_future_complete(self, self.future,timeout_sec=60)
+        return self.future.result()
     
     def set_fusion_config(self):
         req = SetFusionCFG.Request()
@@ -166,8 +166,8 @@ class StartSequence(Node):
             return False
         
         self.future = self.fusion_cfg.call_async(req)
-        rclpy.spin_until_future_complete(self, self.future,timeout_sec=20)
-        return self.future.result().ok
+        rclpy.spin_until_future_complete(self, self.future,timeout_sec=60)
+        return self.future.result()
 
 
 def main(args=None):
@@ -195,17 +195,24 @@ def main(args=None):
     try:
     
         start.get_logger().info('3.Setting IMU config')
-        if not start.set_imu_config():
+        
+        res = start.set_imu_config()
+        
+        if res is None or not res.ok:
             start.get_logger().error('Cannot set IMU config')
     
         start.get_logger().info('4.Setting PID config')
         
-        if not start.set_pid_config():
+        res = start.set_pid_config()
+        
+        if res is None or not res.ok:
             start.get_logger().error('Cannot set PID config')
     
         start.get_logger().info('5.Setting Fusion config')
         
-        if not start.set_fusion_config():
+        res = start.set_fusion_config()
+        
+        if res is None or not res.ok:
             start.get_logger().error('Cannot set Fusion config')
     
     except Exception as e:

@@ -456,7 +456,7 @@ std::shared_ptr<vel_saltis_services::srv::SetPIDCFG::Response> response)
     set_ack_filter('P','U');
 
     // send configuration to board
-    can.send((uint8_t*)&cfg,sizeof(pid_cfg_t),VEL_SALTIS_ID,id);
+    can.send((uint8_t*)&cfg,25,VEL_SALTIS_ID,id);
 
     // wait for ack from can bus, for about 60 seconds
     ack_msg_t msg;

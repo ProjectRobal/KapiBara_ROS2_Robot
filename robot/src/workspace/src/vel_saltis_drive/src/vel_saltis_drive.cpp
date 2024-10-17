@@ -59,6 +59,9 @@ namespace vel_saltis_drive
         this->cfg.right_wheel_name = info_.hardware_parameters["right_wheel_name"];
 
 
+        this->left_servo.name = info_.hardware_parameters["left_ear"];
+        this->right_servo.name = info_.hardware_parameters["right_ear"];
+
         this->cfg.loop_rate = std::stof(info_.hardware_parameters["loop_rate"]);
         
         if( info_.hardware_parameters.count("encoder_resolution") > 0 )
@@ -141,10 +144,15 @@ namespace vel_saltis_drive
 
         std::vector<hardware_interface::StateInterface> state_interfaces;
 
+        // motors
         state_interfaces.emplace_back(hardware_interface::StateInterface(this->w_left.name, hardware_interface::HW_IF_VELOCITY, &this->w_left.velocity));
         state_interfaces.emplace_back(hardware_interface::StateInterface(this->w_left.name, hardware_interface::HW_IF_POSITION, &this->w_left.position));
         state_interfaces.emplace_back(hardware_interface::StateInterface(this->w_right.name, hardware_interface::HW_IF_VELOCITY, &this->w_right.velocity));
         state_interfaces.emplace_back(hardware_interface::StateInterface(this->w_right.name, hardware_interface::HW_IF_POSITION, &this->w_right.position));
+
+        // servos
+        state_interfaces.emplace_back(hardware_interface::StateInterface(this->left_servo.name, hardware_interface::HW_IF_POSITION, &this->left_servo.angle));
+        state_interfaces.emplace_back(hardware_interface::StateInterface(this->right_servo.name, hardware_interface::HW_IF_POSITION, &this->right_servo.angle));
 
         return state_interfaces;
     }
@@ -156,6 +164,9 @@ namespace vel_saltis_drive
 
         command_interfaces.emplace_back(hardware_interface::CommandInterface(this->w_left.name, hardware_interface::HW_IF_VELOCITY, &this->w_left.cmd));
         command_interfaces.emplace_back(hardware_interface::CommandInterface(this->w_right.name, hardware_interface::HW_IF_VELOCITY, &this->w_right.cmd));
+
+        command_interfaces.emplace_back(hardware_interface::CommandInterface(this->left_servo.name, hardware_interface::HW_IF_POSITION, &this->left_servo.angle));
+        command_interfaces.emplace_back(hardware_interface::CommandInterface(this->right_servo.name, hardware_interface::HW_IF_POSITION, &this->right_servo.angle));
 
         return command_interfaces;
 
@@ -199,6 +210,8 @@ namespace vel_saltis_drive
         int16_t right_target_vel = this->w_right.cmd*this->w_right.EncoderToAngelRatio;
 
         this->send_motor_msg(left_target_vel,right_target_vel);
+
+        this->send_servo_msg();
         
         // send speed to motors
 
