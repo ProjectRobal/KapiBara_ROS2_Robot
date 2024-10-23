@@ -154,6 +154,7 @@ class StartSequence(Node):
                 cfg = json.load(file)
 
                 req.config.beta = cfg["beta"]
+                req.config.integral = cfg["integral"]
 
         except json.JSONDecodeError:
             self.get_logger().error('Cannot decode Fusion config json')

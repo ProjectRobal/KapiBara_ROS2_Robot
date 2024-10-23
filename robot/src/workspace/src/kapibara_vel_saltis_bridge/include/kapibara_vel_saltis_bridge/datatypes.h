@@ -18,6 +18,7 @@ typedef enum packet_type
 typedef struct fusion_cfg
 {
     float beta;
+    float integral;
 } fusion_cfg_t ;
 
 typedef struct aux_cfg

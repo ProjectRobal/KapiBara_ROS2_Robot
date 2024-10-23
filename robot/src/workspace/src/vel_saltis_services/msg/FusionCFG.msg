@@ -1,1 +1,2 @@
 float32 beta
+float32 integral

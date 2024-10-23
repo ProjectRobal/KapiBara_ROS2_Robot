@@ -33,7 +33,7 @@ class ResetBoardsService(Node):
         
         self.reset_pin.set_value(1)        
         
-        time.sleep(10)
+        time.sleep(5)
         
         self.reset_pin.set_value(0) 
         

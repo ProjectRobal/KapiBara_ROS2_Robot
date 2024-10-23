@@ -341,6 +341,7 @@ std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
     fusion_cfg_t cfg;
 
     cfg.beta = request->config.beta;
+    cfg.integral = request->config.integral;
 
     set_ack_filter('F','U');
 
@@ -401,6 +402,7 @@ std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
     }
 
     response->config.beta = cfg.beta;
+    response->config.integral = cfg.integral;
 }
 
 void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> request,
