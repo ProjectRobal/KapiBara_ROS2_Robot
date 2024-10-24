@@ -19,6 +19,7 @@ typedef struct fusion_cfg
 {
     float beta;
     float integral;
+    float quaterion[4];
 } fusion_cfg_t ;
 
 typedef struct aux_cfg

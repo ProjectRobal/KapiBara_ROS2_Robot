@@ -3,6 +3,9 @@
     <Domain id="any">
         <General>
             <AllowMulticast>true</AllowMulticast>
+            <Interfaces>
+                <NetworkInterface autodetermine="false" name="ztosim4erz" />
+            </Interfaces>
         </General>      
         <Discovery>
             <ParticipantIndex>auto</ParticipantIndex>

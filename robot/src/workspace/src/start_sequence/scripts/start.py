@@ -155,6 +155,10 @@ class StartSequence(Node):
 
                 req.config.beta = cfg["beta"]
                 req.config.integral = cfg["integral"]
+                req.config.quaterion.x = cfg["quaterion"][0]
+                req.config.quaterion.y = cfg["quaterion"][1]
+                req.config.quaterion.z = cfg["quaterion"][2]
+                req.config.quaterion.w = cfg["quaterion"][3]
 
         except json.JSONDecodeError:
             self.get_logger().error('Cannot decode Fusion config json')

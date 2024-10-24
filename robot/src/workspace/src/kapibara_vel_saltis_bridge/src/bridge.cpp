@@ -343,6 +343,11 @@ std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
     cfg.beta = request->config.beta;
     cfg.integral = request->config.integral;
 
+    cfg.quaterion[0] = request->config.quaterion.x;
+    cfg.quaterion[1] = request->config.quaterion.y;
+    cfg.quaterion[2] = request->config.quaterion.z;
+    cfg.quaterion[3] = request->config.quaterion.w;
+
     set_ack_filter('F','U');
 
     // send configuration to board
@@ -403,6 +408,10 @@ std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
 
     response->config.beta = cfg.beta;
     response->config.integral = cfg.integral;
+    response->config.quaterion.x = cfg.quaterion[0];
+    response->config.quaterion.y = cfg.quaterion[1];
+    response->config.quaterion.z = cfg.quaterion[2];
+    response->config.quaterion.w = cfg.quaterion[3];
 }
 
 void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> request,
