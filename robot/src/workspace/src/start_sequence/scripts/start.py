@@ -16,6 +16,7 @@ from kapibara_interfaces.msg import PID
 from geometry_msgs.msg import Vector3
 
 import json
+import time
 
 
 
@@ -100,6 +101,13 @@ class StartSequence(Node):
                 req.config.accelerometer_offset.x = cfg["accelerometer"]["x"]
                 req.config.accelerometer_offset.y = cfg["accelerometer"]["y"]
                 req.config.accelerometer_offset.z = cfg["accelerometer"]["z"]
+                
+                req.config.mag_offset.x = cfg["mag"]["x"]
+                req.config.mag_offset.y = cfg["mag"]["y"]
+                req.config.mag_offset.z = cfg["mag"]["z"]
+                
+                for i in range(9):
+                    req.config.c_matrix[i] = cfg["c_matrix"][i]
             
         except json.JSONDecodeError:
             self.get_logger().error('Cannot decode IMU config json')
@@ -196,6 +204,8 @@ def main(args=None):
     
     start.get_logger().info('2.Reseting boards')
     start.reset_boards()
+    
+    time.sleep(5.0)
     
     try:
     

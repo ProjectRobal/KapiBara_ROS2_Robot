@@ -1,4 +1,5 @@
 #include "kapibara_vel_saltis_bridge/can.hpp"
+#include <unistd.h>
 
 
 bool CANBridge::start(const char* can_name,uint32_t id,uint32_t mask)
@@ -112,7 +113,7 @@ void CANBridge::send(uint8_t* data,uint32_t size,uint16_t target,uint16_t id)
             frame.data[1] = offset & 0xFF;
             frame.data[2] = ( offset>>8 ) & 0xFF;
 
-            uint8_t data_to_send = std::min(static_cast<uint32_t>(5),size);
+            uint8_t data_to_send = std::min<uint32_t>(5,size);
 
             frame.can_dlc = data_to_send+3;
 
@@ -121,13 +122,18 @@ void CANBridge::send(uint8_t* data,uint32_t size,uint16_t target,uint16_t id)
                 frame.data[3+i] = data[i+data_offset];
             }
 
-            if (write(this->can_sock, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
+            if(write(this->can_sock, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
                 std::cerr<<"Cannot send frame!"<<std::endl;
             }
 
             size -= data_to_send;
             offset += data_to_send;
             data_offset += data_to_send;
+
+            if(size>0)
+            {
+                usleep(50000);
+            }
 
         }
 

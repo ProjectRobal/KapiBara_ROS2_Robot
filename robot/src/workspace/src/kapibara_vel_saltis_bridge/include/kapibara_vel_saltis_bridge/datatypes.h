@@ -13,6 +13,7 @@ typedef enum packet_type
     TOF=4,
     GENERAL_CFG_DATA=5,
     ACK=6,
+    MAG=7
 } packet_type_t;
 
 typedef struct fusion_cfg
@@ -76,6 +77,16 @@ typedef struct imu_raw_accel
     float z;
 } imu_raw_accel_t ;
 
+typedef struct mag_cfg
+{
+    float x;
+    float y;
+    float z;
+
+    float transform[9];
+} mag_cfg_t ;
+
+
 typedef struct imu_raw
 {
     imu_raw_gyro_t gyroscope;
@@ -87,6 +98,7 @@ typedef struct imu_cfg
 {
     imu_raw_gyro_t gyroscope_offset;
     imu_raw_accel_t accelerometer_offset;
+    mag_cfg_t mag_offset;
 } imu_cfg_t ;
 
 typedef struct orientation
@@ -97,6 +109,13 @@ typedef struct orientation
     float w;
     imu_raw_t imu;
 } orientation_t ;
+
+typedef struct mag
+{
+    float x;
+    float y;
+    float z;
+} mag_t;
 
 typedef struct tof
 {

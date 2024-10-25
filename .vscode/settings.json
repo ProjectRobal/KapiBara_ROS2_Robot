@@ -65,7 +65,8 @@
         "condition_variable": "cpp",
         "ranges": "cpp",
         "span": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "valarray": "cpp"
     },
     "cmake.sourceDirectory": "/home/projectrobal/Kapibara/ROS/Robot/camera_ros"
 }

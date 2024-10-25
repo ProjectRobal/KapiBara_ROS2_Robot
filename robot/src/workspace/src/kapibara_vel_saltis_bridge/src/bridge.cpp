@@ -29,6 +29,8 @@ extern "C"
 #include <sensor_msgs/msg/range.hpp>
 
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/magnetic_field.hpp>
+
 
 #include <kapibara_interfaces/msg/encoders_and_speed.hpp>
 
@@ -122,6 +124,8 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher = node->create_publisher<sensor_msgs::msg::Imu>("/imu",10);
 
+    rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_publisher = node->create_publisher<sensor_msgs::msg::MagneticField>("/mag",10);
+
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr tofs[tofCount];
 
     std::string tof_topic="/distance_";
@@ -190,6 +194,21 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                     // printf("Orientaion:\n   x:%f\n  y:%f\n  z:%f\n  w:%f\n",fusion->x,fusion->y,fusion->z,fusion->w);    
                     // printf("IMU:\n  Gyro:\n     x:%f\n      y:%f\n      z:%f\n  Acceleration:\n       x:%f\n      y:%f\n      z:%f\n",
                     // fusion->imu.gyroscope.x,fusion->imu.gyroscope.y,fusion->imu.gyroscope.z,fusion->imu.accelerometer.x,fusion->imu.accelerometer.y,fusion->imu.accelerometer.z);            
+                }
+
+            break;
+
+            case MAG:
+                {
+                    const mag_t* mag = frame->to<mag_t>();
+
+                    auto field = sensor_msgs::msg::MagneticField();
+
+                    field.magnetic_field.x = mag->x;
+                    field.magnetic_field.y = mag->y;
+                    field.magnetic_field.z = mag->z;
+
+                    mag_publisher->publish(field);
                 }
 
             break;
@@ -325,6 +344,15 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
     response->config.gyroscope_offset.y = cfg.gyroscope_offset.y;
     response->config.gyroscope_offset.z = cfg.gyroscope_offset.z;
 
+    response->config.mag_offset.x = cfg.mag_offset.x;
+    response->config.mag_offset.y = cfg.mag_offset.y;
+    response->config.mag_offset.z = cfg.mag_offset.z;
+
+    for(uint8_t i=0;i<9;++i)
+    {
+        response->config.c_matrix[i] = cfg.mag_offset.transform[i];
+    }
+
     service_lock_mux.unlock();
 }
 
@@ -343,10 +371,10 @@ std::shared_ptr<vel_saltis_services::srv::SetFusionCFG::Response> response)
     cfg.beta = request->config.beta;
     cfg.integral = request->config.integral;
 
-    cfg.quaterion[0] = request->config.quaterion.x;
-    cfg.quaterion[1] = request->config.quaterion.y;
-    cfg.quaterion[2] = request->config.quaterion.z;
-    cfg.quaterion[3] = request->config.quaterion.w;
+    cfg.quaterion[0] = request->config.quaterion.w;
+    cfg.quaterion[1] = request->config.quaterion.z;
+    cfg.quaterion[2] = request->config.quaterion.y;
+    cfg.quaterion[3] = request->config.quaterion.x;
 
     set_ack_filter('F','U');
 
@@ -408,10 +436,10 @@ std::shared_ptr<vel_saltis_services::srv::GetFusionCFG::Response> response)
 
     response->config.beta = cfg.beta;
     response->config.integral = cfg.integral;
-    response->config.quaterion.x = cfg.quaterion[0];
-    response->config.quaterion.y = cfg.quaterion[1];
-    response->config.quaterion.z = cfg.quaterion[2];
-    response->config.quaterion.w = cfg.quaterion[3];
+    response->config.quaterion.x = cfg.quaterion[3];
+    response->config.quaterion.y = cfg.quaterion[2];
+    response->config.quaterion.z = cfg.quaterion[1];
+    response->config.quaterion.w = cfg.quaterion[0];
 }
 
 void set_imu_cfg(std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Request> request,
@@ -433,6 +461,15 @@ std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Response> response)
     cfg.gyroscope_offset.x = request->config.gyroscope_offset.x;
     cfg.gyroscope_offset.y = request->config.gyroscope_offset.y;
     cfg.gyroscope_offset.z = request->config.gyroscope_offset.z;
+
+    cfg.mag_offset.x = request->config.mag_offset.x;
+    cfg.mag_offset.y = request->config.mag_offset.y;
+    cfg.mag_offset.z = request->config.mag_offset.z;
+
+    for(uint8_t i=0;i<9;++i)
+    {
+        cfg.mag_offset.transform[i] = request->config.c_matrix[i];
+    }
 
     set_ack_filter('I','U');
 

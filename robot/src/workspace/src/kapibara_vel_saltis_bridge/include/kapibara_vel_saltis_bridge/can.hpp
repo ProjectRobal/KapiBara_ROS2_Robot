@@ -47,6 +47,8 @@ class CANBridge
         this->frames[Encoder] = CanFrame(sizeof(encoder_t),Encoder);
         this->frames[TOF] = CanFrame(sizeof(tof_t),TOF);
         this->frames[GENERAL_CFG_DATA] = CanFrame(CONFIG_MAX_BUFFER_SIZE,GENERAL_CFG_DATA);
+        this->frames[MAG] = CanFrame(sizeof(mag_t),MAG);
+        
         this->frames[ACK] = CanFrame(sizeof(ack_msg_t),ACK);
 
     }
