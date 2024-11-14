@@ -1,0 +1,4 @@
+opencv
+tflite
+tensorflow
+numpy
