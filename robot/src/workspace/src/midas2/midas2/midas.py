@@ -11,7 +11,7 @@ except:
     
 from ament_index_python.packages import get_package_share_directory,get_package_prefix
 
-
+# model page: https://huggingface.co/qualcomm/Midas-V2
 class midasDepthEstimator():
 
 	def __init__(self):

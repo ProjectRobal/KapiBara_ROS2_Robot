@@ -9,6 +9,8 @@ robot/src/workspace/build/*
 # C extensions
 *.so
 
+*.tflite
+
 # Distribution / packaging
 .Python
 env/
