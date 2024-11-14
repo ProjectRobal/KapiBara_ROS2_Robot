@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64/v8 ros:iron-ros-core
+FROM --platform=linux/arm64/v8 ros:humble-ros-core
 
 SHELL ["/bin/bash", "-c"]
 
@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/var/cache/apt apt update -y
 
 RUN --mount=type=cache,target=/var/cache/apt xargs apt -y install < /app/dep/packages.txt
 
-RUN apt install git ninja-build -y
+RUN apt install git ninja-build meson udev python3-ply python3-jinja2 libglib2.0-dev libgstreamer-plugins-base1.0-dev libboost-dev libgnutls28-dev openssl libtiff-dev pybind11-dev  -y
 
 #RUN --mount=type=cache,target=/root/.cache/pip xargs pip3 install < /app/dep/python.txt
 
@@ -21,20 +21,25 @@ RUN mkdir -p /app/cmd
 
 RUN mkdir -p /app/src/workspace
 
-COPY --chmod=755 ./addons /addon
-
-# WORKDIR /addon
-
-# RUN bash install.sh
-
-# RUN ldconfig
+RUN apt remove -y meson
+RUN pip3 install --upgrade meson
 
 WORKDIR /
 
-#COPY --chmod=755 ./entrypoint.sh /entrypoint.sh
+RUN git clone https://github.com/raspberrypi/libcamera.git
 
+WORKDIR /libcamera
 
-# RUN chmod a+x ./entrypoint.sh
+RUN meson setup build --buildtype=release -Dpipelines=rpi/vc4,rpi/pisp -Dipas=rpi/vc4,rpi/pisp -Dv4l2=true -Dgstreamer=enabled -Dtest=false -Dlc-compliance=disabled -Dcam=disabled -Dqcam=disabled -Ddocumentation=disabled -Dpycamera=enabled
+
+RUN ninja -C build
+
+RUN ninja -C build install
+
+WORKDIR /
+
+RUN ldconfig
+
 RUN chmod -R a+x /app/cmd
 
 CMD [ "/entrypoint.sh" ]

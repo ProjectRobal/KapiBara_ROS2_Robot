@@ -25,26 +25,28 @@ services:
       - ./robot/dependencies/rosdep_package.list:/etc/ros/rosdep/sources.list.d/20-default.list
       - /sys:/sys
       - /etc/udev:/etc/udev
-      - /run/udev:/run/udev:ro
+      - /run/udev:/run/udev
       - /run/dbus/:/run/dbus
       - /dev:/dev
+      # - ./addons:/addons
       # - /dev/shm:/dev/shm
       # - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
-    devices:
-      - /dev/snd:/dev/snd
-      - /dev/gpiomem0
-      - /dev/gpiomem1
-      # - /dev/video0
-      # - /dev/media0
-      # - /dev/media1
-      # - /dev/media2
-      # - /dev/media3
-      # - /dev/video1
-      # - /dev/v4l
-      # - /dev/v4l-subdev0
-      # - /dev/v4l-subdev1
-      # - /dev/v4l-subdev2
+    # devices:
+    #   - /dev/snd:/dev/snd
+    #   - /dev/gpiomem0
+    #   - /dev/gpiomem1
+    #   - /dev/video0
+    #   - /dev/media0
+    #   - /dev/media1
+    #   - /dev/media2
+    #   - /dev/media3
+    #   - /dev/media4
+    #   - /dev/video1
+    #   - /dev/v4l
+    #   - /dev/v4l-subdev0
+    #   - /dev/v4l-subdev1
+    #   - /dev/v4l-subdev2
 
     group_add:
       - video
