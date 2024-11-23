@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(kapibara_interfaces)
+project(kapibara_twingo_bridge)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,28 +7,31 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(kapibara_interfaces REQUIRED)
+find_package(vel_saltis_services REQUIRED)
+
+
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
-find_package(rosidl_default_generators REQUIRED)
+include_directories(include)
 
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Encoder.msg"
-  "msg/DiffEncoder.msg"
-  "msg/Microphone.msg"
-  "msg/Servo.msg"
-  "msg/Face.msg"
-  "msg/RectI.msg"
-  "msg/Vector2DI.msg"
-  "msg/Emotions.msg"
-  "msg/EncodersAndSpeed.msg"
-  "msg/CanPing.msg"
-  "msg/CanACK.msg"
-  "msg/PID.msg"
-  "msg/PiezoSense.msg"
-  "srv/Emotions.srv"
-)
+file(GLOB all_SRCS
+        "include/${PROJECT_NAME}/*.h"
+        "include/${PROJECT_NAME}/*.hpp"
+        "include/*.h"
+        "include/*.hpp"
+        "src/*.cpp"
+        "src/*.c"
+        )
+
+add_executable(bridge ${all_SRCS})
+ament_target_dependencies(bridge rclcpp sensor_msgs geometry_msgs std_msgs kapibara_interfaces vel_saltis_services)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -41,5 +44,10 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+install(
+  TARGETS bridge
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()

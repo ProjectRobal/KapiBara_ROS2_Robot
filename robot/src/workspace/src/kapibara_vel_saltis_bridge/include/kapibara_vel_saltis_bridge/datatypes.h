@@ -1,8 +1,11 @@
 #pragma once
 #pragma GCC push_options
 #pragma GCC optimize ("O0")
+#pragma pack(1)
+
 
 #define PACKET_TYPE_COUNT 7
+
 
 typedef enum packet_type
 {
