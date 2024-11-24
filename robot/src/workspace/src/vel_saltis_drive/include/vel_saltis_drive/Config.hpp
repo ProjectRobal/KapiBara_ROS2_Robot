@@ -14,8 +14,6 @@ namespace vel_saltis_drive
         uint32_t encoder_resolution = 4096;
         std::string left_wheel_name = "left_wheel";
         std::string right_wheel_name = "right_wheel";
-        std::string left_ear = "left_ear_joint";
-        std::string right_ear = "right_ear_joint";
 
         std::string can_device = "can0";
 
