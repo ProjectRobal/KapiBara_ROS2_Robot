@@ -1,0 +1,9 @@
+<library path="vel_saltis_ears">
+  <class name="vel_saltis_ears/VelSaltisEars"
+         type="vel_saltis_ears::VelSaltisEars"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Hardware Interface for Vel Saltis board.
+    </description>
+  </class>
+</library>
