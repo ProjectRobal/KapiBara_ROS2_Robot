@@ -69,16 +69,8 @@ namespace vel_saltis_ears
 
         CANBridge can;
 
-        std::mutex can_mux;
-
-        bool can_run;
-
-        std::thread can_task;
-
         Servo left_servo;
         Servo right_servo;
-
-        void read_from_can();
 
         void send_servo_msg()
         {

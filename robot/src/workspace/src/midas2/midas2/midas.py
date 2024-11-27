@@ -3,13 +3,22 @@ import cv2
 import numpy as np
 import urllib.request
 import os
+import platform
 
 try:
     from tflite_runtime.interpreter import Interpreter
+    from tflite_runtime.interpreter import load_delegate
 except:
     from tensorflow.lite.python.interpreter import Interpreter
+    from tensorflow.lite.python.interpreter import load_delegate
     
 from ament_index_python.packages import get_package_share_directory,get_package_prefix
+
+EDGETPU_SHARED_LIB = {
+  'Linux': 'libedgetpu.so.1',
+  'Darwin': 'libedgetpu.1.dylib',
+  'Windows': 'edgetpu.dll'
+}[platform.system()]
 
 # model page: https://huggingface.co/qualcomm/Midas-V2
 class midasDepthEstimator():
@@ -24,11 +33,15 @@ class midasDepthEstimator():
 
 
 	def initializeModel(self):
-		modelPath = 'model/1.tflite'
+		modelPath = 'model/Midas-V2-Quantized_edgetpu.tflite'
 		path = os.path.join(get_package_share_directory("midas2"),modelPath)
 
-		self.interpreter = Interpreter(model_path=path)
+		self.interpreter = Interpreter(
+      model_path=path,
+      experimental_delegates=[load_delegate(EDGETPU_SHARED_LIB)])
 		self.interpreter.allocate_tensors()
+  
+		print("Model initialized!")
 
 		# Get model info
 		self.getModelInputDetails()
@@ -58,14 +71,14 @@ class midasDepthEstimator():
 
 		# Input values should be from -1 to 1 with a size of 128 x 128 pixels for the fornt model
 		# and 256 x 256 pixels for the back model
-		img_input = cv2.resize(img, (self.inputWidth,self.inputHeight),interpolation = cv2.INTER_CUBIC).astype(np.float32)
+		img_input = cv2.resize(img, (self.inputWidth,self.inputHeight),interpolation = cv2.INTER_CUBIC)
 		
 		# Scale input pixel values to -1 to 1
-		mean=[0.485, 0.456, 0.406]
-		std=[0.229, 0.224, 0.225]
-		reshape_img = img_input.reshape(1, self.inputHeight, self.inputWidth,3)
-		img_input = ((img_input/ 255.0 - mean) / std).astype(np.float32)
-		img_input = img_input[np.newaxis,:,:,:]        
+		# mean=[0.485, 0.456, 0.406]
+		# std=[0.229, 0.224, 0.225]
+		# reshape_img = img_input.reshape(1, self.inputHeight, self.inputWidth,3)
+		# img_input = ((img_input/ 255.0 - mean) / std).astype(np.float32)
+		img_input = img_input[np.newaxis,:,:,:].astype(np.uint8)
 
 		return img_input
 
@@ -81,14 +94,14 @@ class midasDepthEstimator():
 	def processRawDisparity(self, rawDisparity, img_shape):
 
 		# Normalize estimated depth to have values between 0 and 255
-		depth_min = rawDisparity.min()
-		depth_max = rawDisparity.max()
-		normalizedDisparity = (255 * (rawDisparity - depth_min) / (depth_max - depth_min)).astype("uint8")
+		# depth_min = rawDisparity.min()
+		# depth_max = rawDisparity.max()
+		# normalizedDisparity = (255 * (rawDisparity - depth_min) / (depth_max - depth_min)).astype("uint8")
   
 		# normalizedDisparity = rawDisparity
 
 		# Resize disparity map to the sam size as the image inference
-		estimatedDepth = cv2.resize(normalizedDisparity, (img_shape[1], img_shape[0]), interpolation=cv2.INTER_CUBIC)
+		estimatedDepth = cv2.resize(rawDisparity, (img_shape[1], img_shape[0]), interpolation=cv2.INTER_CUBIC)
 
 		return estimatedDepth
 

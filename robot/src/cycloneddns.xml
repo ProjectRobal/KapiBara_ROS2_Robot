@@ -4,7 +4,7 @@
         <General>
             <AllowMulticast>true</AllowMulticast>
             <Interfaces>
-                <NetworkInterface autodetermine="false" name="wlan0" />
+                <NetworkInterface autodetermine="false" name="eth0" />
             </Interfaces>
         </General>      
         <Discovery>

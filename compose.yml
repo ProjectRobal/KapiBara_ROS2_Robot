@@ -51,4 +51,5 @@ services:
     group_add:
       - video
       - dialout
+      - 1001
       # - 993

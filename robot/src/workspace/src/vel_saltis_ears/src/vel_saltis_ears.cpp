@@ -16,26 +16,6 @@
 
 namespace vel_saltis_ears
 {
-    void VelSaltisEars::read_from_can()
-    {
-        while(this->can_run)
-        {
-            const CanFrame* frame = this->can.recive();
-
-            if( frame != NULL )
-            {
-                const speed_msg_t *msg = frame->to<speed_msg_t>();
-
-                this->can_mux.lock();
-                // update speed
-
-                this->speed = *msg;
-
-                this->can_mux.unlock();
-            }
-
-        }
-    }
 
     hardware_interface::CallbackReturn VelSaltisEars::on_init(const hardware_interface::HardwareInfo &hardware_info)
     {
@@ -47,8 +27,6 @@ namespace vel_saltis_ears
 
 
         RCLCPP_INFO(rclcpp::get_logger("VelSaltisEars"),"Configuring...");
-
-        this->can_run = true;
 
         if( info_.hardware_parameters.count("can_device") > 0 )
         {

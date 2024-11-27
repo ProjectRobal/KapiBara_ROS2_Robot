@@ -1,4 +1,6 @@
 opencv
 tflite
+python3-tflite-runtime
 tensorflow
 numpy
+python3-pycoral

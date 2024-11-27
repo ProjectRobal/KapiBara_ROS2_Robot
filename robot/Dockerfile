@@ -38,6 +38,24 @@ RUN ninja -C build install
 
 WORKDIR /
 
+RUN echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+
+RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+RUN apt update
+
+RUN apt install libedgetpu1-std devscripts debhelper dkms  -y
+
+RUN git clone https://github.com/google/gasket-driver.git
+
+WORKDIR /gasket-driver
+
+RUN debuild -us -uc -tc -b
+
+WORKDIR /
+
+RUN dpkg -i gasket-dkms_1.0-18_all.deb
+
 RUN ldconfig
 
 RUN chmod -R a+x /app/cmd
