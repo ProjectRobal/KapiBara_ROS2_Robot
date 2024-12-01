@@ -7,6 +7,8 @@ ENV DEBIAN_FRONTEND noninteractive
 
 COPY ./dependencies /app/dep
 
+COPY ./debs /debs
+
 RUN --mount=type=cache,target=/var/cache/apt apt update -y
 
 RUN --mount=type=cache,target=/var/cache/apt xargs apt -y install < /app/dep/packages.txt
@@ -44,7 +46,9 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key ad
 
 RUN apt update
 
-RUN apt install libedgetpu1-std devscripts debhelper dkms  -y
+RUN apt install devscripts debhelper dkms  -y
+
+RUN apt install /debs/libedgetpu-dev.deb /debs/libedgetpu1-std.deb -y
 
 RUN git clone https://github.com/google/gasket-driver.git
 

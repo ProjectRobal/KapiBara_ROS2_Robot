@@ -41,8 +41,6 @@ class midasDepthEstimator():
       experimental_delegates=[load_delegate(EDGETPU_SHARED_LIB)])
 		self.interpreter.allocate_tensors()
   
-		print("Model initialized!")
-
 		# Get model info
 		self.getModelInputDetails()
 		self.getModelOutputDetails()

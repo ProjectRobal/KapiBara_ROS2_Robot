@@ -16,6 +16,8 @@ from rcl_interfaces.msg import ParameterDescriptor
 import numpy as np
 import base64
 
+from timeit import default_timer as timer
+
 class MidasNode(Node):
 
     def __init__(self):
@@ -33,6 +35,8 @@ class MidasNode(Node):
         
         self.midas = midasDepthEstimator()
         
+        self.get_logger().info('Model initialized!')
+        
         self.depth_publisher = self.create_publisher(CompressedImage, '/midas/depth/compressed', 10)
         self.depth_publisher_raw = self.create_publisher(Image, '/midas/depth', 10)
         
@@ -48,7 +52,11 @@ class MidasNode(Node):
         
         image = self.bridge.compressed_imgmsg_to_cv2(msg)
         
+        start = timer()
+        
         colorDepth = self.midas.estimateDepth(image)
+        
+        self.get_logger().info('Estimation time: %f s' % ( timer() - start ))
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
