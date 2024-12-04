@@ -132,8 +132,6 @@ namespace vel_saltis_ears
 
         this->send_servo_msg();
         
-        // send speed to motors
-
         return hardware_interface::return_type::OK;
     }
 

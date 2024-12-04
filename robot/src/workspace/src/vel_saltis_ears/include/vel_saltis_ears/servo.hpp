@@ -26,8 +26,8 @@ class Servo
 
     double getAngle()
     {
-        double out = this->angle*(M_PI/180.f);
+        double out = this->angle*(255.f/M_PI);
 
-        return std::max<double>(std::min<double>(out,180.f),0.f);
+        return std::max<double>(std::min<double>(out,255.f),0.f);
     }
 };  
