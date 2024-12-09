@@ -108,6 +108,9 @@ class StartSequence(Node):
                 
                 for i in range(9):
                     req.config.c_matrix[i] = cfg["c_matrix"][i]
+                    
+                for i in range(3):
+                    req.config.accel_range[i] = cfg["accel_range"][i]
             
         except json.JSONDecodeError:
             self.get_logger().error('Cannot decode IMU config json')

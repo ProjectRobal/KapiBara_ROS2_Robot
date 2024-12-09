@@ -353,6 +353,11 @@ std::shared_ptr<vel_saltis_services::srv::GetImuCFG::Response> response)
         response->config.c_matrix[i] = cfg.mag_offset.transform[i];
     }
 
+    for(uint8_t i=0;i<3;++i)
+    {
+        response->config.accel_range[i] = cfg.accel_range[i];
+    }
+
     service_lock_mux.unlock();
 }
 
@@ -465,6 +470,11 @@ std::shared_ptr<vel_saltis_services::srv::SetImuCFG::Response> response)
     cfg.mag_offset.x = request->config.mag_offset.x;
     cfg.mag_offset.y = request->config.mag_offset.y;
     cfg.mag_offset.z = request->config.mag_offset.z;
+
+    for(uint8_t i=0;i<3;++i)
+    {
+        cfg.accel_range[i] = request->config.accel_range[i];
+    }
 
     for(uint8_t i=0;i<9;++i)
     {

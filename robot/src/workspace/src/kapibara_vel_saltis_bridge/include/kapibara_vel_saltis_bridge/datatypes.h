@@ -102,6 +102,7 @@ typedef struct imu_cfg
     imu_raw_gyro_t gyroscope_offset;
     imu_raw_accel_t accelerometer_offset;
     mag_cfg_t mag_offset;
+    float accel_range[3];
 } imu_cfg_t ;
 
 typedef struct orientation
