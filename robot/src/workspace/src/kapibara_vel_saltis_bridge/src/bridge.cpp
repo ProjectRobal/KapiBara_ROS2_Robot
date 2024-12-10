@@ -206,6 +206,8 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
                     auto field = sensor_msgs::msg::MagneticField();
 
+                    field.header.frame_id = "/imu";
+
                     field.magnetic_field.x = mag->x;
                     field.magnetic_field.y = mag->y;
                     field.magnetic_field.z = mag->z;
