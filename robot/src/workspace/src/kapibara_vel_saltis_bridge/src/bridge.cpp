@@ -176,6 +176,8 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
                     auto _imu = sensor_msgs::msg::Imu();
 
+                    _imu.header.frame_id = "imu_link";
+
                     _imu.orientation.x = fusion->x;
                     _imu.orientation.y = fusion->y;
                     _imu.orientation.z = fusion->z;

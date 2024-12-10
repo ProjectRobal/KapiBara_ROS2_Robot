@@ -1,5 +1,5 @@
 {
-    "beta":10.0,
-    "integral":0.0,
+    "beta":0.5,
+    "integral":0.5,
     "quaterion":[ 0.7071, 0.0, 0.7071, 0.0 ]
 }
