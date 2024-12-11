@@ -5,11 +5,13 @@ from cv_bridge import CvBridge
 import numpy as np
 from midas2.midas import midasDepthEstimator
 
+
 import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import String
 from sensor_msgs.msg import CompressedImage,Image
+from sensor_msgs.msg import PointCloud2,PointField
 
 from rcl_interfaces.msg import ParameterDescriptor
 
@@ -40,6 +42,8 @@ class MidasNode(Node):
         self.depth_publisher = self.create_publisher(CompressedImage, '/midas/depth/compressed', 10)
         self.depth_publisher_raw = self.create_publisher(Image, '/midas/depth', 10)
         
+        self.depth_point_publisher = self.create_publisher(PointCloud2,'/midas/points',10)
+        
         self.subscription = self.create_subscription(
             CompressedImage,
             self.get_parameter('camera_topic').get_parameter_value().string_value,
@@ -60,6 +64,54 @@ class MidasNode(Node):
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
+        
+        gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        width,height,channels = gray_img.shape
+        
+        pointcloud_msg = PointCloud2()
+        pointcloud_msg.header.frame_id = "camera"
+
+        # Define the point fields (attributes)        
+        fields =[PointField('x', 0, PointField.FLOAT32, 1),
+                PointField('y', 4, PointField.FLOAT32, 1),
+                PointField('z', 8, PointField.FLOAT32, 1),
+                PointField('intensity', 12, PointField.FLOAT32,1),
+                ]
+
+        pointcloud_msg.fields = fields
+
+        pointcloud_msg.height = height
+        pointcloud_msg.width = width
+        
+        # Float occupies 4 bytes. Each point then carries 16 bytes.
+        pointcloud_msg.point_step = len(fields) * 4 
+        
+        total_num_of_points = pointcloud_msg.height * pointcloud_msg.width
+        pointcloud_msg.row_step = pointcloud_msg.point_step * total_num_of_points
+        pointcloud_msg.is_dense = True
+        
+        scale = 1.0
+        
+        data = np.zeros((height,width,len(fields)),dtype=np.float32)
+        
+        for y in range(height):
+            for x in range(width):
+                pixel = gray_img[x,y]
+                
+                distance = 1.0 / (pixel*scale)
+                
+                data[y][x][0] = x
+                data[y][x][1] = y
+                data[y][x][2] = distance
+                data[y][x][3] = pixel/255.0
+        
+        pointcloud_msg.data = data.tobytes()
+                
+        self.depth_point_publisher.publish(pointcloud_msg)
+                
+        
+        # estimate 
         
         
 
