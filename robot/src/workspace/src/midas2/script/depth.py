@@ -60,23 +60,55 @@ class MidasNode(Node):
         
         colorDepth = self.midas.estimateDepth(image)
         
-        self.get_logger().info('Estimation time: %f s' % ( timer() - start ))
+        self.get_logger().debug('Estimation time: %f s' % ( timer() - start ))
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
         
         gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        width,height,channels = gray_img.shape
+        gray_img = cv2.resize(gray_img,(16,16))
+        
+        gray_img = cv2.normalize(gray_img, None, 0.0, 1.0, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        
+        width,height = gray_img.shape
         
         pointcloud_msg = PointCloud2()
-        pointcloud_msg.header.frame_id = "camera"
+        pointcloud_msg.header.frame_id = "camera_optical"
+        
+        point_x = PointField()
+        
+        point_x.name = 'x'
+        point_x.offset = 0
+        point_x.datatype = PointField.FLOAT32
+        point_x.count = 1
+        
+        point_y = PointField()
+        
+        point_y.name = 'y'
+        point_y.offset = 4
+        point_y.datatype = PointField.FLOAT32
+        point_y.count = 1
+        
+        point_z = PointField()
+        
+        point_z.name = 'z'
+        point_z.offset = 8
+        point_z.datatype = PointField.FLOAT32
+        point_z.count = 1
+        
+        point_i = PointField()
+        
+        point_i.name = 'intensity'
+        point_i.offset = 12
+        point_i.datatype = PointField.FLOAT32
+        point_i.count = 1
 
         # Define the point fields (attributes)        
-        fields =[PointField('x', 0, PointField.FLOAT32, 1),
-                PointField('y', 4, PointField.FLOAT32, 1),
-                PointField('z', 8, PointField.FLOAT32, 1),
-                PointField('intensity', 12, PointField.FLOAT32,1),
+        fields =[point_x,
+                point_y,
+                point_z,
+                point_i,
                 ]
 
         pointcloud_msg.fields = fields
@@ -99,10 +131,10 @@ class MidasNode(Node):
             for x in range(width):
                 pixel = gray_img[x,y]
                 
-                distance = 1.0 / (pixel*scale)
+                distance = 1.0 / ( ((pixel)*scale) + 10e-6)
                 
-                data[y][x][0] = x
-                data[y][x][1] = y
+                data[y][x][0] = (x - width/2)/width
+                data[y][x][1] = (y - height/2)/height
                 data[y][x][2] = distance
                 data[y][x][3] = pixel/255.0
         
