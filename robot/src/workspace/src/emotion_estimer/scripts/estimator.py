@@ -32,6 +32,8 @@ class EmotionEstimator(Node):
         
         self.current_ranges=[]
         
+        self.id_to_emotion_name = ["angry","fear","happiness","uncertainty","boredom"]
+        
         self.declare_parameter('range_threshold', 0.1)
         self.declare_parameter('accel_threshold', 10.0)
         self.declare_parameter('angular_threshold', 1.0)
@@ -56,7 +58,7 @@ class EmotionEstimator(Node):
         self.declare_parameter('sense_topic', '/sense')
                 
         # anguler values for each emotions state
-        self.emotions_angle=[180.0,0.0,135.0,45.0,90.0]    
+        self.emotions_angle=[0.0,180.0,135.0,45.0,90.0]    
         
         self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
        
@@ -73,7 +75,7 @@ class EmotionEstimator(Node):
         self.last_angular_fear = 0.0
         
         self.procratination_counter = 0
-        self.procratination_timer = self.create_timer(0.5, self.procratination_timer_callback)
+        # self.procratination_timer = self.create_timer(1.0, self.procratination_timer_callback)
         
         # parameter that describe fear distance threshold for laser sensor
         
@@ -110,10 +112,16 @@ class EmotionEstimator(Node):
         
         # Point Cloud 2 callbck
         
+        self.move_lock = True
+        
+        self.pain_value = 0
+        
+        self.points_covarage = 0
+        
         points_topic = self.get_parameter('points_topic').get_parameter_value().string_value
         
         self.get_logger().info("Creating subscription for Point Cloud sensor at topic: "+points_topic)
-        self.imu_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
+        self.point_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
                 
         self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
     
@@ -136,6 +144,8 @@ class EmotionEstimator(Node):
         if np.sum(emotions) >= 0.01:
             max_id:int = np.argmax(emotions)
             
+        # self.get_logger().info("Current emotion: "+str(self.id_to_emotion_name[max_id]))
+            
         self.get_logger().debug("Sending angle to ears: "+str(self.emotions_angle[max_id]))
         
         angle:float = (self.emotions_angle[max_id]/180.0)*np.pi
@@ -150,11 +160,21 @@ class EmotionEstimator(Node):
     def calculate_emotion_status(self) -> np.ndarray:
         emotions=np.zeros(5)
         
+        # anger
+        # fear
+        # happiness
+        # uncertainty
+        # bordorm
         emotions[0] = 0.0
-        emotions[1] = ( self.last_angular_fear > 0.1 )*self.last_angular_fear
+        emotions[1] = ( self.last_angular_fear > 0.1 )*self.last_angular_fear + ( self.points_covarage > 120 )*0.5 + 0.35*self.pain_value
         emotions[2] = 0.0
         emotions[3] = (self.last_uncertanity > 0.1)*self.last_uncertanity
         emotions[4] = np.floor(self.procratination_counter/5.0)
+        
+        self.pain_value = self.pain_value / 1.25
+        
+        if self.pain_value <= 0.1:
+            self.pain_value = 0.0
         
         return emotions
         
@@ -168,6 +188,10 @@ class EmotionEstimator(Node):
         if sense.id == 3:
             self.get_logger().info('Sense: F: {} P: {}\n'.format(sense.frequency,sense.power))
             
+            if sense.power > 120:
+                self.pain_value = 1.0
+            
+            
     def points_callback(self,points:PointCloud2):
         
         if len(points.fields) < 4:
@@ -179,14 +203,19 @@ class EmotionEstimator(Node):
         
         points = np.frombuffer(points.data,dtype=np.float32)
         
+        points = points[2:len(points):4]
+        
         # 4 becaue we have 4 fields
-        if len(points) < width*height*4:
+        if len(points) < width*height:
             self.get_logger().error("Invalid number of point in cloud message")
             return
         
-        points = points.reshape((height,width,4))
+        points = points.reshape((height,width,1))
         
-        # self.get_logger().info("Smallest point value: "+str(np.min(points)))
+        self.points_covarage = ( points < 1.2 ).sum() 
+                
+        self.get_logger().debug("Depth covarage: "+str(self.points_covarage))
+        
         
         
     
@@ -197,8 +226,10 @@ class EmotionEstimator(Node):
         
         self.get_logger().debug("Odom recive velocity of "+str(velocity)+" and angular velocity of "+str(angular))
         if velocity > 0.0001 or angular > 0.01:
+            self.move_lock = True
             self.procratination_counter = 0
-        
+        else:
+            self.move_lock = False        
         
     def imu_callback(self,imu:Imu):
         accel=imu.linear_acceleration
