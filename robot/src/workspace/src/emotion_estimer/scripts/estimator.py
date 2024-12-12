@@ -58,7 +58,7 @@ class EmotionEstimator(Node):
         self.declare_parameter('sense_topic', '/sense')
                 
         # anguler values for each emotions state
-        self.emotions_angle=[0.0,180.0,135.0,45.0,90.0]    
+        self.emotions_angle=[0.0,180.0,45.0,135.0,90.0]    
         
         self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
        
@@ -112,9 +112,13 @@ class EmotionEstimator(Node):
         
         # Point Cloud 2 callbck
         
-        self.move_lock = True
+        self.move_lock = False
         
         self.pain_value = 0
+        
+        self.good_sense = 0
+        
+        self.uncertain_sense = 1.0
         
         self.points_covarage = 0
         
@@ -144,7 +148,7 @@ class EmotionEstimator(Node):
         if np.sum(emotions) >= 0.01:
             max_id:int = np.argmax(emotions)
             
-        # self.get_logger().info("Current emotion: "+str(self.id_to_emotion_name[max_id]))
+        self.get_logger().info("Current emotion: "+str(self.id_to_emotion_name[max_id]))
             
         self.get_logger().debug("Sending angle to ears: "+str(self.emotions_angle[max_id]))
         
@@ -167,14 +171,22 @@ class EmotionEstimator(Node):
         # bordorm
         emotions[0] = 0.0
         emotions[1] = ( self.last_angular_fear > 0.1 )*self.last_angular_fear + ( self.points_covarage > 120 )*0.5 + 0.35*self.pain_value
-        emotions[2] = 0.0
-        emotions[3] = (self.last_uncertanity > 0.1)*self.last_uncertanity
+        emotions[2] = self.good_sense*0.5
+        emotions[3] = (self.last_uncertanity > 0.1)*self.last_uncertanity + self.uncertain_sense*0.5
         emotions[4] = np.floor(self.procratination_counter/5.0)
         
         self.pain_value = self.pain_value / 1.25
+        self.good_sense = self.good_sense / 1.5
+        self.uncertain_sense = self.uncertain_sense / 1.35
         
         if self.pain_value <= 0.1:
             self.pain_value = 0.0
+            
+        if self.good_sense <= 0.1:
+            self.good_sense = 0.0
+            
+        if self.uncertain_sense <= 0.1:
+            self.uncertain_sense = 0.0
         
         return emotions
         
@@ -190,6 +202,12 @@ class EmotionEstimator(Node):
             
             if sense.power > 120:
                 self.pain_value = 1.0
+                
+            if sense.frequency <= 4 and sense.power <= 50 and sense.power > 10:
+                self.good_sense = 1.0
+                
+            if sense.frequency > 4:
+                self.uncertain_sense = 1.0
             
             
     def points_callback(self,points:PointCloud2):
