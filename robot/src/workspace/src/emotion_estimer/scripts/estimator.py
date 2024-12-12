@@ -5,11 +5,13 @@ from rclpy.node import Node
 
 from std_msgs.msg import Float64MultiArray
 
-from sensor_msgs.msg import Range,Imu
+from sensor_msgs.msg import Range,Imu,PointCloud2
 from geometry_msgs.msg import Quaternion
 
-from kapibara_interfaces.srv import Emotions
+from kapibara_interfaces.msg import Emotions
 from kapibara_interfaces.msg import Microphone
+from kapibara_interfaces.msg import PiezoSense
+
 
 from nav_msgs.msg import Odometry
 
@@ -39,10 +41,10 @@ class EmotionEstimator(Node):
         self.declare_parameter('ears_topic','/ears_controller/commands')
         
         # a list of topics of tof sensors
-        self.declare_parameter('tofs', ['/laser_front'])
+        self.declare_parameter('points_topic', '/midas/points' )
         
         # a orientation callback
-        self.declare_parameter('imu', '/Gazebo/orientation')
+        self.declare_parameter('imu', '/imu')
         
         # a topic to listen for audio from microphone
         self.declare_parameter('mic', '')
@@ -50,13 +52,15 @@ class EmotionEstimator(Node):
         # a topic to listen for odometry 
         self.declare_parameter('odom','/motors/odom')
         
-        self.service = self.create_service(Emotions,'emotions',self.emotions_callback)    
-        
+        # piezo sense sensors
+        self.declare_parameter('sense_topic', '/sense')
+                
         # anguler values for each emotions state
         self.emotions_angle=[180.0,0.0,135.0,45.0,90.0]    
         
-        self.ears_publisher=self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
-        
+        self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
+       
+        self.emotion_publisher = self.create_publisher(Emotions,"/emotions",10)
         
         self.accel_threshold = self.get_parameter('accel_threshold').get_parameter_value().double_value
         self.last_accel = 0.0
@@ -74,16 +78,6 @@ class EmotionEstimator(Node):
         # parameter that describe fear distance threshold for laser sensor
         
         self.range_threshold = self.get_parameter('range_threshold').get_parameter_value().double_value
-        self.laser_subscriptions=[]
-        
-        # create N of those subscriptions
-        
-        tofs = self.get_parameter('tofs').get_parameter_value().string_array_value
-        
-        for id,tof in enumerate(tofs):
-            self.get_logger().info("Creating subscription for TOF sensor at topic: "+tof+" with id "+str(id))
-            self.laser_subscriptions.append(self.create_subscription(Range,tof,lambda msg,x=id: self.laser_callback(msg,x),10))
-            self.current_ranges.append(0.0)
         
         # Orienataion callback
         
@@ -91,6 +85,14 @@ class EmotionEstimator(Node):
         
         self.get_logger().info("Creating subscription for IMU sensor at topic: "+imu_topic)
         self.imu_subscripe = self.create_subscription(Imu,imu_topic,self.imu_callback,10)
+        
+        # Sense callback
+        
+        sense_topic = self.get_parameter('sense_topic').get_parameter_value().string_value
+        
+        self.get_logger().info("Creating subscription for Pizeo Sense at topic: "+sense_topic)
+        self.sense_subscripe = self.create_subscription(PiezoSense,sense_topic,self.sense_callabck,10)
+    
         
         # Microphone callback use audio model 
         
@@ -106,15 +108,32 @@ class EmotionEstimator(Node):
         self.get_logger().info("Creating subscription for odometry sensor at topic: "+odom_topic)
         self.odom_subscripe = self.create_subscription(Odometry,odom_topic,self.odom_callback,10)
         
-        self.ears_timer = self.create_timer(1.0, self.ears_subscriber_timer)
+        # Point Cloud 2 callbck
+        
+        points_topic = self.get_parameter('points_topic').get_parameter_value().string_value
+        
+        self.get_logger().info("Creating subscription for Point Cloud sensor at topic: "+points_topic)
+        self.imu_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
+                
+        self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
     
     # subscribe ears position based on current emotion 
     def ears_subscriber_timer(self):
         emotions = self.calculate_emotion_status()
         
-        if np.sum(emotions) < 0.01:
-            max_id=4
-        else:
+        _emotions = Emotions()
+        
+        _emotions.angry = emotions[0]
+        _emotions.fear = emotions[1]
+        _emotions.happiness = emotions[2]
+        _emotions.uncertainty = emotions[3]
+        _emotions.boredom = emotions[4]
+        
+        self.emotion_publisher.publish(_emotions)
+        
+        max_id = 4
+        
+        if np.sum(emotions) >= 0.01:
             max_id:int = np.argmax(emotions)
             
         self.get_logger().debug("Sending angle to ears: "+str(self.emotions_angle[max_id]))
@@ -123,16 +142,17 @@ class EmotionEstimator(Node):
         
         array=Float64MultiArray()
         
-        array.data=[angle,angle]
+        array.data=[np.pi - angle, angle]
         
         self.ears_publisher.publish(array)
+    
     
     def calculate_emotion_status(self) -> np.ndarray:
         emotions=np.zeros(5)
         
         emotions[0] = 0.0
-        emotions[1] = ( 1.0 - min( ( min( self.current_ranges )/self.range_threshold ),1.0) ) + ( self.last_angular_fear > 0.1 )*self.last_angular_fear
-        emotions[2] =0.0
+        emotions[1] = ( self.last_angular_fear > 0.1 )*self.last_angular_fear
+        emotions[2] = 0.0
         emotions[3] = (self.last_uncertanity > 0.1)*self.last_uncertanity
         emotions[4] = np.floor(self.procratination_counter/5.0)
         
@@ -142,6 +162,33 @@ class EmotionEstimator(Node):
     def procratination_timer_callback(self):
         if self.procratination_counter < 10000:
             self.procratination_counter = self.procratination_counter + 1
+            
+    def sense_callabck(self,sense:PiezoSense):
+        
+        if sense.id == 3:
+            self.get_logger().info('Sense: F: {} P: {}\n'.format(sense.frequency,sense.power))
+            
+    def points_callback(self,points:PointCloud2):
+        
+        if len(points.fields) < 4:
+            self.get_logger().error("Invalid point cloud message")
+            return
+        
+        width = points.width
+        height = points.height
+        
+        points = np.frombuffer(points.data,dtype=np.float32)
+        
+        # 4 becaue we have 4 fields
+        if len(points) < width*height*4:
+            self.get_logger().error("Invalid number of point in cloud message")
+            return
+        
+        points = points.reshape((height,width,4))
+        
+        # self.get_logger().info("Smallest point value: "+str(np.min(points)))
+        
+        
     
     def odom_callback(self,odom:Odometry):
         
@@ -152,10 +199,6 @@ class EmotionEstimator(Node):
         if velocity > 0.0001 or angular > 0.01:
             self.procratination_counter = 0
         
-    
-    def laser_callback(self,laser:Range,id):
-        self.get_logger().debug("Got range with id "+str(id)+" with range: "+str(laser.range))
-        self.current_ranges[id]=laser.range
         
     def imu_callback(self,imu:Imu):
         accel=imu.linear_acceleration
@@ -185,20 +228,6 @@ class EmotionEstimator(Node):
     def mic_callback(self,mic:Microphone):
         # I have to think about it
         pass
-    
-    def emotions_callback(self, request, response):
-        
-        self.get_logger().debug("Current ranges kept by program: "+str(self.current_ranges))
-        
-        emotions = self.calculate_emotion_status()
-        
-        response.angry=emotions[0]
-        response.fear=emotions[1]
-        response.happiness=emotions[2]
-        response.uncertainty=emotions[3]
-        response.boredom=emotions[4]
-                
-        return response
 
 
 def main(args=None):
