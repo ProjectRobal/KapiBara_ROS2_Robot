@@ -2,7 +2,6 @@
 import cv2
 from cv_bridge import CvBridge
 
-import numpy as np
 from midas2.midas import midasDepthEstimator
 
 
@@ -60,7 +59,7 @@ class MidasNode(Node):
         
         colorDepth = self.midas.estimateDepth(image)
         
-        self.get_logger().debug('Estimation time: %f s' % ( timer() - start ))
+        self.get_logger().info('Estimation time: %f s' % ( timer() - start ))
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))

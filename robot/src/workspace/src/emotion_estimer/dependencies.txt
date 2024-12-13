@@ -1,4 +1,6 @@
+tensorflow-model-optimization
 opencv-python
 tflite
 tensorflow
+keras
 numpy

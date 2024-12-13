@@ -32,6 +32,11 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
+install(
+  DIRECTORY model
+  DESTINATION share/${PROJECT_NAME}
+)
+
 install(PROGRAMS
   scripts/estimator.py
   DESTINATION lib/${PROJECT_NAME}
