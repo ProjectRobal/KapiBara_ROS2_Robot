@@ -218,6 +218,10 @@ class KapibaraAudio:
     def get_result(self,prediction):
 
         return self.answers[tf.argmax(prediction.numpy()[0])]
+    
+    def id_to_name(self,id):
+        
+        return self.answers[id]
 
     '''audio - raw audio input'''
     def input(self,audio):
@@ -233,12 +237,15 @@ class KapibaraAudio:
         
         
         if self.tflite:
+            
+            spectrogram = tf.reshape(spectrogram,self.input_details[0]['shape'])
+            
             self.model.set_tensor(self.input_details[0]['index'],spectrogram)
             self.model.invoke()
             
             prediction = self.model.get_tensor(self.output_details[0]['index'])
-            
-            return self.get_result(prediction)
+                        
+            return int(tf.argmax(prediction[0]))
 
         prediction = self.model(spectrogram)
 

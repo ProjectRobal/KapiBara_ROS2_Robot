@@ -149,9 +149,10 @@ class EmotionEstimator(Node):
         
         mic_topic = self.get_parameter('mic').get_parameter_value().string_value
         
-        if len(mic_topic)>0:
-            self.get_logger().info("Creating subscription for IMU sensor at topic: "+mic_topic)
-            self.mic_subscripe = self.create_subscription(Microphone,mic_topic,self.mic_callback,10)
+        self.mic_buffor = np.zeros(2*16000,dtype=np.float32)
+        
+        self.get_logger().info("Creating subscription for Microphone at topic: "+mic_topic)
+        self.mic_subscripe = self.create_subscription(Microphone,mic_topic,self.mic_callback,10)
         
         # Subcription for odometry
         
@@ -253,7 +254,7 @@ class EmotionEstimator(Node):
         
         colorDepth = self.midas.estimateDepth(image)
         
-        self.get_logger().info('Estimation time: %f s' % ( timer() - start ))
+        self.get_logger().debug('Estimation time: %f s' % ( timer() - start ))
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
@@ -422,7 +423,24 @@ class EmotionEstimator(Node):
     
     def mic_callback(self,mic:Microphone):
         # I have to think about it
-        pass
+        
+        self.mic_buffor = np.roll(self.mic_buffor,mic.buffor_size)
+        
+        left = np.array(mic.channel1,dtype=np.float32)/np.iinfo(np.int32).max
+        right = np.array(mic.channel2,dtype=np.float32)/np.iinfo(np.int32).max
+        
+        combine = ( left + right ) / 2.0
+        
+        self.mic_buffor[:mic.buffor_size] = combine[:]
+        
+        start = timer()
+        
+        output = self.hearing.input(self.mic_buffor)
+                
+        self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
+        
+        self.get_logger().debug("Hearing output: "+str(output))
+
 
 
 def main(args=None):
