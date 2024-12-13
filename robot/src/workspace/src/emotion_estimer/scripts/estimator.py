@@ -77,9 +77,15 @@ class EmotionEstimator(Node):
         
         # piezo sense sensors
         self.declare_parameter('sense_topic', '/sense')
-                
+        
+        
+        # angry
+        # fear
+        # happiness
+        # uncertainty
+        # boredom 
         # anguler values for each emotions state
-        self.emotions_angle=[0.0,180.0,45.0,135.0,90.0]    
+        self.emotions_angle=[0.0,180.0,25.0,135.0,90.0]    
         
         self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
        
@@ -118,10 +124,14 @@ class EmotionEstimator(Node):
         self.thrust = 0.0
         self.last_uncertanity = 0.0
         
+        self.thrust_fear = 0.0
+        
         self.angular_threshold = self.get_parameter('angular_threshold').get_parameter_value().double_value
         self.last_angular = 0.0
         self.angular_jerk = 0.0
         self.last_angular_fear = 0.0
+        
+        self.jerk_fear = 0.0
         
         self.procratination_counter = 0
         # self.procratination_timer = self.create_timer(1.0, self.procratination_timer_callback)
@@ -196,7 +206,7 @@ class EmotionEstimator(Node):
         max_id = 4
         
         if np.sum(emotions) >= 0.01:
-            max_id:int = np.argmax(emotions)
+            max_id:int = np.argmax(emotions[:4])
             
         self.get_logger().debug("Current emotion: "+str(self.id_to_emotion_name[max_id]))
             
@@ -220,23 +230,31 @@ class EmotionEstimator(Node):
         # uncertainty
         # bordorm
         emotions[0] = 0.0
-        emotions[1] = ( self.last_angular_fear > 0.1 )*self.last_angular_fear + ( self.points_covarage > 120 )*0.5 + 0.35*self.pain_value
+        emotions[1] = self.thrust_fear*0.25 + ( self.points_covarage > 120 )*0.5 + 0.35*self.pain_value
         emotions[2] = self.good_sense
-        emotions[3] = (self.last_uncertanity > 0.1)*self.last_uncertanity + self.uncertain_sense*0.5
+        emotions[3] = self.jerk_fear*0.25 + self.uncertain_sense*0.5
         emotions[4] = np.floor(self.procratination_counter/5.0)
         
         self.pain_value = self.pain_value / 1.25
         self.good_sense = self.good_sense / 1.5
         self.uncertain_sense = self.uncertain_sense / 1.35
+        self.thrust_fear = self.thrust_fear / 2
+        self.jerk_fear = self.jerk_fear / 2
         
-        if self.pain_value <= 0.1:
+        if self.pain_value <= 0.01:
             self.pain_value = 0.0
             
-        if self.good_sense <= 0.1:
+        if self.good_sense <= 0.01:
             self.good_sense = 0.0
             
-        if self.uncertain_sense <= 0.1:
+        if self.uncertain_sense <= 0.01:
             self.uncertain_sense = 0.0
+            
+        if self.thrust_fear <= 0.01:
+            self.thrust_fear = 0.0
+            
+        if self.jerk_fear <= 0.01:
+            self.jerk_fear = 0.0
         
         return emotions
         
@@ -345,7 +363,7 @@ class EmotionEstimator(Node):
             return
         
         if sense.id == 3:
-            self.get_logger().debug('Sense: F: {} P: {}\n'.format(sense.frequency,sense.power))
+            self.get_logger().info('Sense: F: {} P: {}\n'.format(sense.frequency,sense.power))
             
             if sense.power > 135:
                 self.pain_value = 1.0
@@ -390,7 +408,7 @@ class EmotionEstimator(Node):
         angular = odom.twist.twist.angular.x*odom.twist.twist.angular.x + odom.twist.twist.angular.y*odom.twist.twist.angular.y + odom.twist.twist.angular.z*odom.twist.twist.angular.z
         
         self.get_logger().debug("Odom recive velocity of "+str(velocity)+" and angular velocity of "+str(angular))
-        if velocity > 0.0001 or angular > 0.01:
+        if velocity > 0.0001 or angular > 0.00001:
             self.move_lock = True
             self.procratination_counter = 0
         else:
@@ -399,15 +417,19 @@ class EmotionEstimator(Node):
     def imu_callback(self,imu:Imu):
         accel=imu.linear_acceleration
         
-        accel_value = np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z)/3  
+        accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 1.0)
         
         self.thrust = abs(accel_value-self.last_accel)
         
         self.last_accel = accel_value
         
-        self.last_uncertanity = (self.thrust/self.accel_threshold) + 0.5*self.last_uncertanity
-                
-        self.get_logger().debug("Thrust uncertanity value "+str(self.last_uncertanity))
+        if self.move_lock:
+            self.thrust = 0
+
+        if self.thrust > 1.0:
+            self.get_logger().info("Too harsh force")
+            self.thrust_fear = 1.0
+            self.procratination_counter = 0
         
         angular = imu.angular_velocity
         
@@ -417,9 +439,13 @@ class EmotionEstimator(Node):
         
         self.last_angular = angular_value
         
-        self.last_angular_fear = (self.angular_jerk/self.angular_threshold) + 0.4*self.last_angular_fear
+        if self.move_lock:
+            self.angular_jerk = 0
         
-        self.get_logger().debug("Jerk value fear "+str(self.last_angular_fear))
+        if self.angular_jerk > 40.0:        
+            self.get_logger().info("I feel dizzy")
+            self.jerk_fear = 1.0
+            self.procratination_counter = 0
     
     def mic_callback(self,mic:Microphone):
         # I have to think about it
