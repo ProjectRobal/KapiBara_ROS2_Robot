@@ -70,7 +70,7 @@ class EmotionEstimator(Node):
         self.declare_parameter('imu', '/imu')
         
         # a topic to listen for audio from microphone
-        self.declare_parameter('mic', '')
+        self.declare_parameter('mic', '/mic')
         
         # a topic to listen for odometry 
         self.declare_parameter('odom','/motors/odom')
