@@ -182,10 +182,12 @@ class EmotionEstimator(Node):
         
         self.points_covarage = 0
         
-        points_topic = self.get_parameter('points_topic').get_parameter_value().string_value
+        # it is not needed
         
-        self.get_logger().info("Creating subscription for Point Cloud sensor at topic: "+points_topic)
-        self.point_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
+        # points_topic = self.get_parameter('points_topic').get_parameter_value().string_value
+        
+        # self.get_logger().info("Creating subscription for Point Cloud sensor at topic: "+points_topic)
+        # self.point_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
                 
         self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
     
@@ -339,6 +341,8 @@ class EmotionEstimator(Node):
         
         data = np.zeros((height,width,len(fields)),dtype=np.float32)
         
+        self.points_covarage = 0
+        
         for y in range(height):
             for x in range(width):
                 pixel = gray_img[x,y]
@@ -349,12 +353,15 @@ class EmotionEstimator(Node):
                 data[y][x][1] = (y - height/2)/height
                 data[y][x][2] = distance
                 data[y][x][3] = pixel/255.0
+                
+                if distance < 1.2:
+                    self.points_covarage += 1
         
         pointcloud_msg.data = data.tobytes()
                 
         self.depth_point_publisher.publish(pointcloud_msg)
                 
-        
+        self.get_logger().debug("Depth covarage: "+str(self.points_covarage))
         # estimate 
             
     def sense_callabck(self,sense:PiezoSense):
