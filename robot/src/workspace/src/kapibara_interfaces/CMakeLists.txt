@@ -19,6 +19,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Microphone.msg"
   "msg/Servo.msg"
   "msg/Face.msg"
+  "msg/FaceEmbed.msg"
   "msg/RectI.msg"
   "msg/Vector2DI.msg"
   "msg/Emotions.msg"

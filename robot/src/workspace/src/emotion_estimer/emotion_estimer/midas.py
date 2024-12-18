@@ -12,7 +12,7 @@ except:
     from tensorflow.lite.python.interpreter import Interpreter
     from tensorflow.lite.python.interpreter import load_delegate
     
-from ament_index_python.packages import get_package_share_directory,get_package_prefix
+from ament_index_python.packages import get_package_share_directory
 
 EDGETPU_SHARED_LIB = {
   'Linux': 'libedgetpu.so.1',

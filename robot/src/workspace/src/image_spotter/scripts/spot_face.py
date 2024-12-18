@@ -44,6 +44,8 @@ class FaceSpotter(Node):
             10)
         self.subscription  # prevent unused variable warning
         
+        self.get_logger().info('Spot face started!!!')
+        
     def check_for_faces(self,img):
         
         try:

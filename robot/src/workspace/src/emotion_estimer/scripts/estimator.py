@@ -20,6 +20,8 @@ from sensor_msgs.msg import PointCloud2,PointField
 
 from rcl_interfaces.msg import ParameterDescriptor
 
+from kapibara_interfaces.msg import FaceEmbed
+
 import os
 
 import cv2
@@ -36,6 +38,9 @@ from ament_index_python.packages import get_package_share_directory,get_package_
 
 from emotion_estimer.kapibara_audio import KapibaraAudio
 from emotion_estimer.midas import midasDepthEstimator
+
+from emotion_estimer.DeepIDTFLite import DeepIDTFLite
+from emotion_estimer.TFLiteFaceDetector import UltraLightFaceDetecion
 
 '''
 
@@ -78,7 +83,11 @@ class EmotionEstimator(Node):
         # piezo sense sensors
         self.declare_parameter('sense_topic', '/sense')
         
+        # store 500 face embeddings + rewards
+        self.embeddings_buffor = np.zeros((500,161),dtype=np.float32)
         
+        
+        self.current_embeddings = []
         # angry
         # fear
         # happiness
@@ -94,7 +103,7 @@ class EmotionEstimator(Node):
         model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model','model_edgetpu.tflite')
         
         self.get_logger().info("Loading KapiBara Audio model from: "+model_path)
-        self.hearing = KapibaraAudio(path= model_path ,tflite=True)
+        self.hearing = KapibaraAudio(path=model_path ,tflite=True)
         self.get_logger().info("Loaded KapiBara Audio model")
         
         self.bridge = CvBridge()
@@ -103,6 +112,24 @@ class EmotionEstimator(Node):
         self.get_logger().info('Initializing MiDas2...')
         
         self.midas = midasDepthEstimator()
+        
+        self.get_logger().info('Model initialized!')
+        
+        
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model','slim_edgetpu.tflite')
+        
+        self.get_logger().info('Initializing LiteFaceDetector...')
+        
+        self.face_detect = UltraLightFaceDetecion(filepath=model_path)
+        
+        self.get_logger().info('Model initialized!')
+        
+        
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model','deepid_edgetpu.tflite')
+        
+        self.get_logger().info('Initializing LiteFaceDetector...')
+        
+        self.deep_id = DeepIDTFLite(filepath=model_path)
         
         self.get_logger().info('Model initialized!')
         
@@ -169,6 +196,9 @@ class EmotionEstimator(Node):
         odom_topic = self.get_parameter('odom').get_parameter_value().string_value
         self.get_logger().info("Creating subscription for odometry sensor at topic: "+odom_topic)
         self.odom_subscripe = self.create_subscription(Odometry,odom_topic,self.odom_callback,10)
+        
+        self.get_logger().info("Creating publisher for spoted faces")
+        self.face_publisher = self.create_publisher(FaceEmbed, '/spoted_faces', 10)
         
         # Point Cloud 2 callbck
         
@@ -270,11 +300,38 @@ class EmotionEstimator(Node):
         
         image = self.bridge.compressed_imgmsg_to_cv2(msg)
         
+        # face detection:
+        
+        boxes,scores = self.face_detect.inference(image)
+        
+        self.current_embeddings.clear()
+        
+        mean_embed = np.zeros(160,dtype=np.float32)
+        
+        for box in boxes.astype(int):
+            
+            img = image[box[1]:box[3],box[0]:box[2]]
+            
+            embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
+            
+            mean_embed += embed
+            
+            self.current_embeddings.append(embed)
+        
+        if len(boxes) != 0:
+            mean_embed /= len(boxes)
+        
+        face = FaceEmbed()
+        
+        face.embedding = mean_embed.tolist()
+        
+        self.face_publisher.publish(face)
+        
         start = timer()
         
         colorDepth = self.midas.estimateDepth(image)
         
-        self.get_logger().debug('Estimation time: %f s' % ( timer() - start ))
+        self.get_logger().info('Estimation time: %f s' % ( timer() - start ))
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
@@ -375,7 +432,7 @@ class EmotionEstimator(Node):
             if sense.power > 135:
                 self.pain_value = 1.0
                 
-            if sense.frequency <= 4 and sense.power <= 50 and sense.power > 10:
+            if sense.frequency <= 4 and sense.power <= 120 and sense.power > 10:
                 self.good_sense = 1.0
                 
             if sense.frequency > 4:
