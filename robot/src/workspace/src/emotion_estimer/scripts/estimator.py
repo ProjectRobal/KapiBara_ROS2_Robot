@@ -212,6 +212,10 @@ class EmotionEstimator(Node):
         
         self.points_covarage = 0
         
+        self._last_sense = 0
+        self._thrust = 0
+        self._patting_counter = 0
+        self.last_delta = 0.0
         # it is not needed
         
         # points_topic = self.get_parameter('points_topic').get_parameter_value().string_value
@@ -262,7 +266,7 @@ class EmotionEstimator(Node):
         # uncertainty
         # bordorm
         emotions[0] = 0.0
-        emotions[1] = self.thrust_fear*0.25 + ( self.points_covarage > 120 )*0.5 + 0.35*self.pain_value
+        emotions[1] = self.thrust_fear*0.25 + ( self.points_covarage > 50 )*0.5 + 0.35*self.pain_value
         emotions[2] = self.good_sense
         emotions[3] = self.jerk_fear*0.25 + self.uncertain_sense*0.5
         emotions[4] = np.floor(self.procratination_counter/5.0)
@@ -400,43 +404,63 @@ class EmotionEstimator(Node):
         
         self.points_covarage = 0
         
+        min = 100
+        
         for y in range(height):
             for x in range(width):
                 pixel = gray_img[x,y]
                 
                 distance = 1.0 / ( ((pixel)*scale) + 10e-6)
                 
-                data[y][x][0] = (x - width/2)/width
-                data[y][x][1] = (y - height/2)/height
+                data[y][x][1] = (x - width/2)/width
+                data[y][x][0] = (y - height/2)/height
                 data[y][x][2] = distance
                 data[y][x][3] = pixel/255.0
                 
-                if distance < 1.2:
+                if distance < 1.1:
                     self.points_covarage += 1
+                    
+                if distance < min:
+                    min = distance
         
         pointcloud_msg.data = data.tobytes()
                 
         self.depth_point_publisher.publish(pointcloud_msg)
                 
-        self.get_logger().debug("Depth covarage: "+str(self.points_covarage))
+        self.get_logger().info("Min point: "+str(min))
+        self.get_logger().info("Point coverage: "+str(self.points_covarage))
         # estimate 
             
     def sense_callabck(self,sense:PiezoSense):
         
-        if self.move_lock:
-            return
-        
-        if sense.id == 3:
-            self.get_logger().info('Sense: F: {} P: {}\n'.format(sense.frequency,sense.power))
+        if sense.id == 0:
             
-            if sense.power > 135:
+            past_sense = self._last_sense
+            self._last_sense = self._last_sense - 0.25*(self._last_sense - sense.frequency)
+                        
+            delta = abs(self._last_sense - past_sense)
+            
+            self.get_logger().info('Sense: F: {} P: {} T: {}\n'.format(self._last_sense,delta,self._thrust))
+            
+            # if self._last_sense > 219.0:
+            #     self.good_sense = 1.0
+            
+            if self._thrust > 0:
+                self._thrust -= 1
+                if self.last_delta == 1.5:
+                    self.good_sense = 1.0
+                return
+            
+            if delta > 2.5:
                 self.pain_value = 1.0
-                
-            if sense.frequency <= 4 and sense.power <= 120 and sense.power > 10:
+                self.last_delta = 3.0
+                self._thrust = 10
+                self.get_logger().info('Pain occured: {}'.format(delta))
+            elif delta > 1.5:
                 self.good_sense = 1.0
-                
-            if sense.frequency > 4:
-                self.uncertain_sense = 1.0
+                self.last_delta = 1.5
+                self._thrust = 10
+                self.get_logger().info('Pat occured: {}'.format(delta))
             
             
     def points_callback(self,points:PointCloud2):
@@ -529,7 +553,7 @@ class EmotionEstimator(Node):
                 
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         
-        self.get_logger().debug("Hearing output: "+str(output))
+        self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
 
 
 
