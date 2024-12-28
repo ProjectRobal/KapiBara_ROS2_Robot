@@ -216,6 +216,9 @@ class EmotionEstimator(Node):
         self._thrust = 0
         self._patting_counter = 0
         self.last_delta = 0.0
+        
+        
+        self.found_wall = False
         # it is not needed
         
         # points_topic = self.get_parameter('points_topic').get_parameter_value().string_value
@@ -266,9 +269,9 @@ class EmotionEstimator(Node):
         # uncertainty
         # bordorm
         emotions[0] = 0.0
-        emotions[1] = self.thrust_fear*0.25 + ( self.points_covarage > 50 )*0.5 + 0.35*self.pain_value
+        emotions[1] = self.thrust_fear*0.25  + 0.35*self.pain_value
         emotions[2] = self.good_sense
-        emotions[3] = self.jerk_fear*0.25 + self.uncertain_sense*0.5
+        emotions[3] = self.jerk_fear*0.25 + self.found_wall*0.5 + self.uncertain_sense*0.5
         emotions[4] = np.floor(self.procratination_counter/5.0)
         
         self.pain_value = self.pain_value / 1.25
@@ -335,7 +338,7 @@ class EmotionEstimator(Node):
         
         colorDepth = self.midas.estimateDepth(image)
         
-        self.get_logger().info('Estimation time: %f s' % ( timer() - start ))
+        self.get_logger().debug('Estimation time: %f s' % ( timer() - start ))
         
         self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
         self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
@@ -427,40 +430,86 @@ class EmotionEstimator(Node):
                 
         self.depth_point_publisher.publish(pointcloud_msg)
                 
-        self.get_logger().info("Min point: "+str(min))
-        self.get_logger().info("Point coverage: "+str(self.points_covarage))
-        # estimate 
+        self.get_logger().debug("Min point: "+str(min))
+        self.get_logger().debug("Point coverage: "+str(self.points_covarage))
+        
+        # analyze for walls
+        
+        points = data[:,:,2].reshape(height,width)
+        
+        points_filtered = np.where(points<1.4,1,0)
+        
+        img = cv2.normalize(points_filtered, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+                    
+        img = cv2.transpose(img)
+
+        contours, hierarch = cv2.findContours(img,cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        # print(len(contours))
+        
+        spot_locations = []
+        
+        for i,con in enumerate(contours):
+            
+            center = np.mean(con,axis=0)[0]
+            spot_locations.append(center)
+            
+            self.get_logger().debug("Position of points "+str(i)+" : "+str(center))
+            
+        
+        if len(spot_locations)==2:
+            passed = 0
+            
+            for spot in spot_locations:
+                if spot[1] < 9 and spot[1] > 7:
+                    passed+=1
+            
+            if passed == 2:
+                self.get_logger().debug("Found wall!")
+                self.found_wall = True
+                return
+        elif len(spot_locations)==1:
+            self.get_logger().debug("Found wall!")
+            self.found_wall = True
+            return
+        
+        self.found_wall = False
+        
             
     def sense_callabck(self,sense:PiezoSense):
         
         if sense.id == 0:
             
-            past_sense = self._last_sense
-            self._last_sense = self._last_sense - 0.25*(self._last_sense - sense.frequency)
+            # past_sense = self._last_sense
+            # self._last_sense = self._last_sense - 0.25*(self._last_sense - sense.frequency)
                         
-            delta = abs(self._last_sense - past_sense)
+            # delta = abs(self._last_sense - past_sense)
             
-            self.get_logger().info('Sense: F: {} P: {} T: {}\n'.format(self._last_sense,delta,self._thrust))
+            delta = sense.power
+            
+            val = sense.frequency
+            
+            self.get_logger().debug('Sense: F: {} P: {} T: {}\n'.format(val,delta,self._thrust))
             
             # if self._last_sense > 219.0:
             #     self.good_sense = 1.0
             
             if self._thrust > 0:
                 self._thrust -= 1
-                if self.last_delta == 1.5:
-                    self.good_sense = 1.0
+                if self.last_delta == 150:
+                    self.good_sense = 100
                 return
             
-            if delta > 2.5:
+            if delta > 250:
                 self.pain_value = 1.0
-                self.last_delta = 3.0
+                self.last_delta = 300
                 self._thrust = 10
-                self.get_logger().info('Pain occured: {}'.format(delta))
-            elif delta > 1.5:
+                self.get_logger().debug('Pain occured: {}'.format(delta))
+            elif delta > 150:
                 self.good_sense = 1.0
-                self.last_delta = 1.5
+                self.last_delta = 150
                 self._thrust = 10
-                self.get_logger().info('Pat occured: {}'.format(delta))
+                self.get_logger().debug('Pat occured: {}'.format(delta))
             
             
     def points_callback(self,points:PointCloud2):
