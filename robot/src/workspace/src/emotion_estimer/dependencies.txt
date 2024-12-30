@@ -4,3 +4,4 @@ tflite
 tensorflow
 keras
 numpy
+tiny_vectordb

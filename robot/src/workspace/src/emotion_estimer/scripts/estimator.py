@@ -23,6 +23,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from kapibara_interfaces.msg import FaceEmbed
 
 import os
+import json
 
 import cv2
 from cv_bridge import CvBridge
@@ -30,6 +31,7 @@ from cv_bridge import CvBridge
 from nav_msgs.msg import Odometry
 
 from timeit import default_timer as timer
+import time
 
 from copy import copy
 import numpy as np
@@ -42,12 +44,8 @@ from emotion_estimer.midas import midasDepthEstimator
 from emotion_estimer.DeepIDTFLite import DeepIDTFLite
 from emotion_estimer.TFLiteFaceDetector import UltraLightFaceDetecion
 
-'''
 
-We have sensors topics that will estimate angers 
-
-'''
-
+from tiny_vectordb import VectorDatabase
 
 class EmotionEstimator(Node):
 
@@ -83,8 +81,11 @@ class EmotionEstimator(Node):
         # piezo sense sensors
         self.declare_parameter('sense_topic', '/sense')
         
+        # face database file
+        self.declare_parameter('face_db', 'face.db')
+        
         # store 500 face embeddings + rewards
-        self.embeddings_buffor = np.zeros((500,161),dtype=np.float32)
+        self.embeddings_buffor = np.zeros((500,160),dtype=np.float32)
         
         
         self.current_embeddings = []
@@ -227,6 +228,20 @@ class EmotionEstimator(Node):
         # self.point_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
                 
         self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
+        
+        self.face_db_name:str = self.get_parameter('face_db').get_parameter_value().string_value
+        
+        self.face_score_name = self.face_db_name+"_scores"
+        
+        
+        self.face_database = VectorDatabase(self.face_db_name,[{
+        "name":"faces",
+        "dimension":160
+        }])
+        
+        self.faces = self.face_database['faces']
+        
+        self.faces_score = {}
     
     # subscribe ears position based on current emotion 
     def ears_subscriber_timer(self):
@@ -319,11 +334,18 @@ class EmotionEstimator(Node):
             
             img = image[box[1]:box[3],box[0]:box[2]]
             
+            width = box[3] - box[1]
+            height = box[2] - box[0]
+            
+            distance = width*height
+            
+            
             embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
             
             mean_embed += embed
             
-            self.current_embeddings.append(embed)
+            # set of embedding and estimated distance
+            self.current_embeddings.append([embed,distance])
         
         if len(boxes) != 0:
             mean_embed /= len(boxes)
@@ -500,17 +522,54 @@ class EmotionEstimator(Node):
                     self.good_sense = 100
                 return
             
+            score = 0
+            
             if delta > 250:
                 self.pain_value = 1.0
                 self.last_delta = 300
                 self._thrust = 10
                 self.get_logger().debug('Pain occured: {}'.format(delta))
+                
+                score = -10
+                
             elif delta > 150:
                 self.good_sense = 1.0
                 self.last_delta = 150
                 self._thrust = 10
                 self.get_logger().debug('Pat occured: {}'.format(delta))
+                
+                score = 10
+                
             
+            if score !=0:
+                # check if spotted face are present in database:
+                    
+                # sort by distances from robot                
+                self.current_embeddings = sorted(self.current_embeddings,key=lambda x: x[1],reverse=True)
+                
+                nearest_face = self.current_embeddings[0]
+                
+                faces_in_database:int = len(self.faces)
+                
+                if len(self.faces)>0:
+                    search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
+                    
+                    if search_scores[0] >= 0.95:
+                        # set emotion to a face
+                        self.faces_score[search_ids[0]] = self.generate_face_instance(score)
+                        return
+                
+                ids = "ids"+str(faces_in_database+1)
+                self.faces.setBlock([ids],[nearest_face[0]])
+                self.faces_score[ids] = self.generate_face_instance(score)    
+                    
+    def generate_face_instance(self,score:float)->dict:   
+        
+        # a score attached to a face, time a UNIX timestamp when face was added
+        return  {
+            "score":score,
+            "time":int(time.time())
+        }
             
     def points_callback(self,points:PointCloud2):
         
@@ -603,6 +662,34 @@ class EmotionEstimator(Node):
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         
         self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
+        
+    def load_faces(self):
+        
+        try:        
+            with open(self.face_score_name,"r") as file:
+                self.faces_score = json.load(file)
+        except OSError:
+            self.get_logger().error("Cannot load faces score!!!")
+        
+        
+    def save_faces(self):
+        
+        self.get_logger().info("Saving faces embeddings!")
+        
+        self.face_database.commit()
+        
+        self.get_logger().info("Faces embeddings saved!")
+        
+        self.get_logger().info("Saving faces scores!")
+        
+        with open(self.face_score_name,'w') as file:
+            file.write(json.dumps(self.faces_score))
+            
+        self.get_logger().info("Faces scores saved!")
+        
+    def __del__(self):
+        self.save_faces()
+        
 
 
 
