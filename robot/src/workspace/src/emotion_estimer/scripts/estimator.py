@@ -297,11 +297,20 @@ class EmotionEstimator(Node):
             
             nearest_face = self.current_embeddings[0]
             
-            search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
+            search_ids, search_scores = self.faces.search(nearest_face[0],k=10)
                     
             if len(search_scores)>0 and search_scores[0] >= 0.875:
                 face_score = self.faces_score[search_ids[0]]["score"]
+                
+                self.faces_score[search_ids[0]]["time"] = int(time.time())
+                
                 self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
+                
+            for ids,score in zip(search_ids,search_scores):
+                if score >= 0.875:
+                    self.faces_score[ids]["time"] = int(time.time())
+            
+            self.save_faces_metadata()
         
         # anger
         # fear
