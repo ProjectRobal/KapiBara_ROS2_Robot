@@ -82,7 +82,7 @@ class EmotionEstimator(Node):
         self.declare_parameter('sense_topic', '/sense')
         
         # face database file
-        self.declare_parameter('face_db', 'face.db')
+        self.declare_parameter('face_db', '/app/src/face')
         
         # store 500 face embeddings + rewards
         self.embeddings_buffor = np.zeros((500,160),dtype=np.float32)
@@ -95,7 +95,7 @@ class EmotionEstimator(Node):
         # uncertainty
         # boredom 
         # anguler values for each emotions state
-        self.emotions_angle=[0.0,180.0,25.0,135.0,90.0]    
+        self.emotions_angle=[0.0,180.0,25.0,145.0,90.0]    
         
         self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
        
@@ -229,9 +229,12 @@ class EmotionEstimator(Node):
                 
         self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
         
-        self.face_db_name:str = self.get_parameter('face_db').get_parameter_value().string_value
+        # each 30 minutes
+        self.save_face_timer = self.create_timer(30*60, self.save_face_timer_callback)
         
-        self.face_score_name = self.face_db_name+"_scores"
+        self.face_db_name:str = self.get_parameter('face_db').get_parameter_value().string_value+".db"
+        
+        self.face_score_name = self.face_db_name+"_scores.json"
         
         
         self.face_database = VectorDatabase(self.face_db_name,[{
@@ -242,6 +245,14 @@ class EmotionEstimator(Node):
         self.faces = self.face_database['faces']
         
         self.faces_score = {}
+        
+        self.load_faces()
+        
+        self.skip_frames_counter = 0
+        
+    def save_face_timer_callback(self):
+        self.get_logger().debug("Saving face callback!")
+        self.save_faces()
     
     # subscribe ears position based on current emotion 
     def ears_subscriber_timer(self):
@@ -278,15 +289,29 @@ class EmotionEstimator(Node):
     def calculate_emotion_status(self) -> np.ndarray:
         emotions=np.zeros(5)
         
+        face_score = 0
+        
+        if len(self.current_embeddings)>0:
+            # sort by distances from robot                
+            self.current_embeddings = sorted(self.current_embeddings,key=lambda x: x[1],reverse=True)
+            
+            nearest_face = self.current_embeddings[0]
+            
+            search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
+                    
+            if len(search_scores)>0 and search_scores[0] >= 0.875:
+                face_score = self.faces_score[search_ids[0]]["score"]
+                self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
+        
         # anger
         # fear
         # happiness
         # uncertainty
         # bordorm
         emotions[0] = 0.0
-        emotions[1] = self.thrust_fear*0.25  + 0.35*self.pain_value
-        emotions[2] = self.good_sense
-        emotions[3] = self.jerk_fear*0.25 + self.found_wall*0.5 + self.uncertain_sense*0.5
+        emotions[1] = self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 0.5*self.pain_value
+        emotions[2] = self.good_sense + ( face_score > 0 )*0.5
+        emotions[3] = self.jerk_fear*0.25 + self.found_wall*0.75 + self.uncertain_sense*0.5
         emotions[4] = np.floor(self.procratination_counter/5.0)
         
         self.pain_value = self.pain_value / 1.25
@@ -320,6 +345,13 @@ class EmotionEstimator(Node):
     def camera_listener(self, msg:CompressedImage):
         self.get_logger().debug('I got image with format: %s' % msg.format)
         
+        self.skip_frames_counter+=1
+        
+        if self.skip_frames_counter < 3:
+            return
+        
+        self.skip_frames_counter = 0
+        
         image = self.bridge.compressed_imgmsg_to_cv2(msg)
         
         # face detection:
@@ -330,6 +362,10 @@ class EmotionEstimator(Node):
         
         mean_embed = np.zeros(160,dtype=np.float32)
         
+        sum_distances = 0
+        
+        # A mean embedding takes into account distance between robot and face.
+        
         for box in boxes.astype(int):
             
             img = image[box[1]:box[3],box[0]:box[2]]
@@ -339,16 +375,17 @@ class EmotionEstimator(Node):
             
             distance = width*height
             
+            sum_distances += distance
             
             embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
             
-            mean_embed += embed
+            mean_embed += embed*distance
             
             # set of embedding and estimated distance
             self.current_embeddings.append([embed,distance])
         
         if len(boxes) != 0:
-            mean_embed /= len(boxes)
+            mean_embed /= sum_distances
         
         face = FaceEmbed()
         
@@ -502,11 +539,6 @@ class EmotionEstimator(Node):
         
         if sense.id == 0:
             
-            # past_sense = self._last_sense
-            # self._last_sense = self._last_sense - 0.25*(self._last_sense - sense.frequency)
-                        
-            # delta = abs(self._last_sense - past_sense)
-            
             delta = sense.power
             
             val = sense.frequency
@@ -528,7 +560,7 @@ class EmotionEstimator(Node):
                 self.pain_value = 1.0
                 self.last_delta = 300
                 self._thrust = 10
-                self.get_logger().debug('Pain occured: {}'.format(delta))
+                self.get_logger().info('Pain occured: {}'.format(delta))
                 
                 score = -10
                 
@@ -536,12 +568,12 @@ class EmotionEstimator(Node):
                 self.good_sense = 1.0
                 self.last_delta = 150
                 self._thrust = 10
-                self.get_logger().debug('Pat occured: {}'.format(delta))
+                self.get_logger().info('Pat occured: {}'.format(delta))
                 
                 score = 10
                 
             
-            if score !=0:
+            if score !=0 and len(self.current_embeddings)>0:
                 # check if spotted face are present in database:
                     
                 # sort by distances from robot                
@@ -554,15 +586,28 @@ class EmotionEstimator(Node):
                 if len(self.faces)>0:
                     search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
                     
-                    if search_scores[0] >= 0.95:
+                    if len(search_scores)>0 and search_scores[0] >= 0.875:
                         # set emotion to a face
                         self.faces_score[search_ids[0]] = self.generate_face_instance(score)
+                        self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
                         return
+                    
                 
                 ids = "ids"+str(faces_in_database+1)
-                self.faces.setBlock([ids],[nearest_face[0]])
-                self.faces_score[ids] = self.generate_face_instance(score)    
+                # remove the oledest face when we got more than 500 elements in database
+                if len(self.faces)>500:
+                    sorted_faces = sorted(self.faces_score.items(),key = lambda x:x[1]["time"])
                     
+                    ids = sorted_faces[0]
+                    self.get_logger().info("Face with "+ids+" has been overwritten!")
+                
+                self.faces.setBlock([ids],[nearest_face[0]])
+                self.faces_score[ids] = self.generate_face_instance(score)
+                self.get_logger().info("Face with "+ids+" has been added!")
+                
+                self.save_faces_metadata()
+                
+                                        
     def generate_face_instance(self,score:float)->dict:   
         
         # a score attached to a face, time a UNIX timestamp when face was added
@@ -670,6 +715,15 @@ class EmotionEstimator(Node):
                 self.faces_score = json.load(file)
         except OSError:
             self.get_logger().error("Cannot load faces score!!!")
+            
+    def save_faces_metadata(self):
+        
+        self.get_logger().info("Saving faces scores!")
+        
+        with open(self.face_score_name,'w') as file:
+            file.write(json.dumps(self.faces_score))
+            
+        self.get_logger().info("Faces scores saved!")
         
         
     def save_faces(self):
@@ -680,15 +734,8 @@ class EmotionEstimator(Node):
         
         self.get_logger().info("Faces embeddings saved!")
         
-        self.get_logger().info("Saving faces scores!")
+        self.save_faces_metadata()        
         
-        with open(self.face_score_name,'w') as file:
-            file.write(json.dumps(self.faces_score))
-            
-        self.get_logger().info("Faces scores saved!")
-        
-    def __del__(self):
-        self.save_faces()
         
 
 
@@ -703,6 +750,7 @@ def main(args=None):
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
+    emotion_estimator.save_faces()
     emotion_estimator.destroy_node()
     rclpy.shutdown()
 
