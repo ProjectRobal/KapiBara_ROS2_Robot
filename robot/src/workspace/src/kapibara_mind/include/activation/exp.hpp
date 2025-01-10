@@ -4,24 +4,20 @@
 
 namespace snn
 {
-    class Sigmoid
+    class Exp
     {
         
         public:
 
         static inline void activate(SIMDVector& vec)
         {
-            SIMDVector v=exp(vec);
-
-            vec=v/(v+1);
+            exp(vec);
         }
 
         template<size_t Size>
         static inline void activate(SIMDVectorLite<Size>& vec)
         {
-            SIMDVectorLite<Size> v=exp(vec);
-
-            vec=v/(v+1);
+            exp(vec);
         }
 
         static inline void inverse(SIMDVector& vec)

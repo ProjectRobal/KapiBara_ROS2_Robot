@@ -4,7 +4,7 @@
 #include <experimental/simd>
 
 // specific number types used by neurons
-typedef long double number;
+typedef float number;
 
 #define MAX_SIMD_VECTOR_SIZE std::experimental::simd_abi::max_fixed_size<number>
 
@@ -22,6 +22,23 @@ typedef std::experimental::fixed_size_simd_mask<number , MAX_SIMD_VECTOR_SIZE> S
 
 #define SWARMING_SPEED_DEFAULT 10.f
 
-#define MAX_PAST_NEURONS 6
+#define INITIAL_STD 0.1f
 
-#define DUMPING_FACTOR 0.8f
+#define MIN_STD 0.00001f
+
+#define MAX_STD 0.5f
+
+#define MUTATION_PROBABILITY 0.25f
+
+
+// A maximum weight switch probablity
+#define MAX_SWITCH_PROBABILITY 0.1f
+
+// A probability at which weights are switched
+#define REWARD_TO_SWITCH_PROBABILITY -0.0005f
+
+// A rate at weights move to positive weight
+#define POSITIVE_P 0.1f
+
+
+#define USED_THREADS 4

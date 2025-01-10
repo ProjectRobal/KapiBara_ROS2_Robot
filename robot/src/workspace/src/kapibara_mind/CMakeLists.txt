@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(kapibara_mind)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -ffast-math -O3 -std=c++20)
 endif()
 
 # find dependencies
@@ -21,6 +21,8 @@ find_package(kapibara_interfaces REQUIRED)
 
 include_directories(include)
 
+find_package(OpenSSL REQUIRED)
+
 file(GLOB all_SRCS
         "include/*.h"
         "include/*.hpp"
@@ -30,7 +32,7 @@ file(GLOB all_SRCS
 
 add_executable(mind ${all_SRCS})
 ament_target_dependencies(mind rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs kapibara_interfaces)
-target_link_libraries(mind fftw3)
+target_link_libraries(mind fftw3 OpenSSL::Crypto)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -46,7 +48,7 @@ endif()
 
 install(
   TARGETS mind
-  DESTINATION lib//${PROJECT_NAME}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()

@@ -4,7 +4,7 @@
 
 namespace snn
 {
-    class Sigmoid
+    class SiLu
     {
         
         public:
@@ -13,7 +13,7 @@ namespace snn
         {
             SIMDVector v=exp(vec);
 
-            vec=v/(v+1);
+            vec=(v/(v+1))*vec;
         }
 
         template<size_t Size>
@@ -21,11 +21,13 @@ namespace snn
         {
             SIMDVectorLite<Size> v=exp(vec);
 
-            vec=v/(v+1);
+            vec=(v/(v+1))*vec;
         }
 
         static inline void inverse(SIMDVector& vec)
         {
+            
+            
             
         }
     };

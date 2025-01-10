@@ -232,8 +232,10 @@ class KapibaraAudio:
 
         if audio.shape[0]>BUFFER_SIZE:
             audio=tf.slice(audio,0,BUFFER_SIZE)
+            
+        audio_spectogram = self.gen_spectogram(audio)
 
-        spectrogram=self.gen_spectogram(audio)[None,...,tf.newaxis]
+        spectrogram=audio_spectogram(audio)[None,...,tf.newaxis]
         
         
         if self.tflite:
@@ -245,9 +247,9 @@ class KapibaraAudio:
             
             prediction = self.model.get_tensor(self.output_details[0]['index'])
                         
-            return int(tf.argmax(prediction[0]))
+            return int(tf.argmax(prediction[0])),audio_spectogram
 
-        prediction = self.model(spectrogram)
+        prediction = self.model(spectrogram),audio_spectogram
 
         return self.get_result(prediction)
 

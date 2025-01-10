@@ -3,6 +3,9 @@
         {
             "name": "Linux",
             "defines": [],
+            "includePath": [
+                "robot/src/workspace/src/kapibara_mind/include"
+            ],
             "compilerPath": "/usr/bin/g++",
             "cStandard": "c11",
             "cppStandard": "c++17",

@@ -139,6 +139,8 @@ class EmotionEstimator(Node):
         
         self.depth_point_publisher = self.create_publisher(PointCloud2,'/midas/points',10)
         
+        self.spectogram_publisher = self.create_publisher(Image, '/spectogram', 10)
+        
         self.subscription = self.create_subscription(
             CompressedImage,
             self.get_parameter('camera_topic').get_parameter_value().string_value,
@@ -711,7 +713,14 @@ class EmotionEstimator(Node):
         
         start = timer()
         
-        output = self.hearing.input(self.mic_buffor)
+        output,spectogram = self.hearing.input(self.mic_buffor)
+        
+        spectogram = spectogram.numpy()
+        
+        spectogram = cv2.normalize(spectogram,None,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        
+        # publish last spectogram
+        self.spectogram_publisher.publish(self.bridge.cv2_to_imgmsg(spectogram))
                 
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         

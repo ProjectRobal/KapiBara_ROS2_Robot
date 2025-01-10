@@ -8,40 +8,28 @@
 
 namespace snn
 {
-    class GaussInit : public Initializer
+    template<number mean,number std>
+    class GaussInit
     {
 
         std::normal_distribution<number> gauss;
 
+        std::mt19937 gen; 
+
         public:
 
-        GaussInit(number mean,number std)
-        : gauss(mean,std)
+        GaussInit()
         {
+            std::random_device rd;
 
+            this->gen = std::mt19937(rd());
+
+            this->global = std::normal_distribution<number>(mean,std);  
         }
 
-        void init(SIMDVector& vec,size_t N)
+        number init()
         {
-            std::random_device rd; 
-
-            // Mersenne twister PRNG, initialized with seed from previous random device instance
-            std::mt19937 gen(rd()); 
-
-            for(size_t i=0;i<N;++i)
-            {
-                vec.append(this->gauss(gen));
-            }
-        }
-
-        void init(number& n)
-        {
-            std::random_device rd; 
-
-            // Mersenne twister PRNG, initialized with seed from previous random device instance
-            std::mt19937 gen(rd()); 
-
-            n=this->gauss(gen);
+            return this->global(this->gen);
         }
     };
 }
