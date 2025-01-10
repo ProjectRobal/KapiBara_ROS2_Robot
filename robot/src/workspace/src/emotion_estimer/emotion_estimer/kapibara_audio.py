@@ -235,7 +235,7 @@ class KapibaraAudio:
             
         audio_spectogram = self.gen_spectogram(audio)
 
-        spectrogram=audio_spectogram(audio)[None,...,tf.newaxis]
+        spectrogram=audio_spectogram[None,...,tf.newaxis]
         
         
         if self.tflite:

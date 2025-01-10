@@ -66,7 +66,26 @@
         "ranges": "cpp",
         "span": "cpp",
         "regex": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "any": "cpp",
+        "cfenv": "cpp",
+        "charconv": "cpp",
+        "codecvt": "cpp",
+        "forward_list": "cpp",
+        "map": "cpp",
+        "mutex": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp",
+        "format": "cpp",
+        "stdfloat": "cpp",
+        "__nullptr": "cpp",
+        "__bit_reference": "cpp",
+        "__hash_table": "cpp",
+        "__split_buffer": "cpp",
+        "__tree": "cpp",
+        "set": "cpp",
+        "locale": "cpp",
+        "__locale": "cpp"
     },
     "cmake.sourceDirectory": "/home/projectrobal/Kapibara/ROS/Robot/camera_ros"
 }
