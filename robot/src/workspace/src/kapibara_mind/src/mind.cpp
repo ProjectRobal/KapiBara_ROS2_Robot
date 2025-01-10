@@ -100,6 +100,7 @@ class KapiBaraMind : public rclcpp::Node
 
     snn::Arbiter arbiter;
 
+    size_t max_iter;
 
     std::shared_ptr<snn::LayerKAC<680,96,20>> encoder;
 
@@ -155,6 +156,8 @@ class KapiBaraMind : public rclcpp::Node
         {
 
             auto layer = std::make_shared<KapiBara_SubLayer>();
+
+            layer.set_trainable(false);
     
             // auto sub_layer2 = std::make_shared<snn::LayerKAC<128,64,20,snn::ReLu>>();
 
@@ -362,6 +365,13 @@ class KapiBaraMind : public rclcpp::Node
 
         this->arbiter.applyReward(reward);
 
+        this->layers[this->max_iter].applyReward(reward);
+
+        this->arbiter.shuttle();
+
+        this->layers[this->max_iter].shuttle();
+
+
         const snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);
 
         size_t max_iter = 0;
@@ -429,6 +439,8 @@ class KapiBaraMind : public rclcpp::Node
 
         this->declare_parameter("max_angular_speed", 10.f);
 
+        this->max_iter = 0;
+
         this->inputs = snn::SIMDVectorLite<680>(0);
 
         this->init_network();
@@ -477,7 +489,7 @@ class KapiBaraMind : public rclcpp::Node
 
         // select layer based on softmax output of picker
 
-        size_t max_iter = 0;
+        this->max_iter = 0;
 
         for(size_t i=1;i<MEMBERS_COUNT;i++)
         {
@@ -489,10 +501,7 @@ class KapiBaraMind : public rclcpp::Node
 
         auto out = this->layers[max_iter]->fire(output3);
 
-        // arbiter.applyReward(x);
-
-        arbiter.shuttle();
-
+        return out;
     }
 
 };

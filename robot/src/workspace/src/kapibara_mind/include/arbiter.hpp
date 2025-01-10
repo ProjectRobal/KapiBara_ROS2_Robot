@@ -84,7 +84,10 @@ namespace snn
         {
             while(ptr<layers.size())
             {
-                layers[ptr]->shuttle();
+                if(layer->get_trainable())
+                {
+                    layers[ptr]->shuttle();
+                }
 
                 std::lock_guard _mux(mux);
 
@@ -138,7 +141,10 @@ namespace snn
         {
             for(std::shared_ptr<Layer> layer : this->layers)
             {
-                layer->applyReward(reward);
+                if(layer->get_trainable())
+                {
+                    layer->applyReward(reward);
+                }
             }
         }
 
