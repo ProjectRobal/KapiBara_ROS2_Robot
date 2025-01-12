@@ -8,4 +8,4 @@ rosdep update
 
 rosdep install --from-paths /app/src/workspace/src --ignore-src -r -y -q
 
-colcon build --symlink-install --packages-select $1
+colcon build --symlink-install --build-base $BUILD_LOCATION --install-base $INSTALL_LOCATION --packages-select $1

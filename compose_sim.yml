@@ -1,0 +1,48 @@
+version: '3.9'
+
+
+services:
+  gazebo:
+    container_name: kapibara_robot_sim
+    network_mode: host
+    image: robot_gazebo_ros
+
+    privileged: true
+    build:
+      dockerfile: ./Dockerfile.sim
+      context: ./robot
+    runtime: nvidia
+    env_file:
+      - ./robot/env/sim
+    environment:
+      - ROS_DOMAIN_ID = 0
+    volumes:
+      - ./robot/entrypoint.sh:/entrypoint.sh:rwx
+      - ./robot/commands/:/app/cmd
+      - ./robot/dependencies/:/app/dep
+      - ./robot/src:/app/src:rw
+      - ./robot/dependencies/rosdep_package.list:/etc/ros/rosdep/sources.list.d/20-default.list
+      - /sys:/sys
+      - /etc/udev:/etc/udev
+      - /run/udev:/run/udev
+      - /run/dbus/:/run/dbus
+      - /dev:/dev
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+    devices:
+      - "/dev/dri/:/dev/dri/"
+      - /dev/snd:/dev/snd
+      # - "/dev/kfd:/dev/kfd"
+
+    group_add:
+      - video
+      - dialout
+      - 1001
+      # - 993

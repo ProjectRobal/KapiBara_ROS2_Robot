@@ -1,7 +1,9 @@
 LANG=en_US.UTF-8
+DISPLAY=${DISPLAY}
 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 CYCLONEDDS_URI=file:///app/src/cycloneddns.xml
 PYTHONUNBUFFERED=1
+QT_QPA_PLATFORM=xcb
 UDEV=on
-BUILD_LOCATION=./build
-INSTALL_LOCATION=./install
+BUILD_LOCATION=./sim_build
+INSTALL_LOCATION=./sim_install
