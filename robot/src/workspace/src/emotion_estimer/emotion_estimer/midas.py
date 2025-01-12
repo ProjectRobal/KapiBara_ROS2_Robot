@@ -32,13 +32,17 @@ class midasDepthEstimator():
 		self.initializeModel()
 
 
-	def initializeModel(self):
-		modelPath = 'model/Midas-V2-Quantized_edgetpu.tflite'
+	def initializeModel(self,modelPath:str):
 		path = os.path.join(get_package_share_directory("emotion_estimer"),modelPath)
+  
+		delegates=[]
+                
+		if path.find("_edgetpu")>0:
+			delegates=[load_delegate(EDGETPU_SHARED_LIB)]
 
 		self.interpreter = Interpreter(
       model_path=path,
-      experimental_delegates=[load_delegate(EDGETPU_SHARED_LIB)])
+      experimental_delegates=delegates)
 		self.interpreter.allocate_tensors()
   
 		# Get model info

@@ -62,6 +62,12 @@ class EmotionEstimator(Node):
         self.declare_parameter('accel_threshold', 10.0)
         self.declare_parameter('angular_threshold', 1.0)
         
+        # models paths
+        self.declare_parameter('midas_model', 'Midas-V2-Quantized_edgetpu.tflite')
+        self.declare_parameter('deepid_model', 'deepid_edgetpu.tflite')
+        self.declare_parameter('face_model', 'slim_edgetpu.tflite')
+        self.declare_parameter('audio_model', 'model_edgetpu.tflite')
+        
         # a topic to send ears position
         
         self.declare_parameter('ears_topic','/ears_controller/commands')
@@ -101,7 +107,7 @@ class EmotionEstimator(Node):
        
         self.emotion_publisher = self.create_publisher(Emotions,"/emotions",10)
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model','model_edgetpu.tflite')
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('audio_model').get_parameter_value().string_value)
         
         self.get_logger().info("Loading KapiBara Audio model from: "+model_path)
         self.hearing = KapibaraAudio(path=model_path ,tflite=True)
@@ -112,12 +118,14 @@ class EmotionEstimator(Node):
         # initialize model
         self.get_logger().info('Initializing MiDas2...')
         
-        self.midas = midasDepthEstimator()
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('midas_model').get_parameter_value().string_value)
+        
+        self.midas = midasDepthEstimator(model_path)
         
         self.get_logger().info('Model initialized!')
         
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model','slim_edgetpu.tflite')
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('face_model').get_parameter_value().string_value)
         
         self.get_logger().info('Initializing LiteFaceDetector...')
         
@@ -126,7 +134,7 @@ class EmotionEstimator(Node):
         self.get_logger().info('Model initialized!')
         
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model','deepid_edgetpu.tflite')
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('deepid_model').get_parameter_value().string_value)
         
         self.get_logger().info('Initializing LiteFaceDetector...')
         

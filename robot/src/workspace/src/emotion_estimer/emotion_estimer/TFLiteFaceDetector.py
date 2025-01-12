@@ -39,10 +39,15 @@ class UltraLightFaceDetecion():
         self._nms = partial(tf.image.non_max_suppression,
                             max_output_size=nms_max_output_size,
                             iou_threshold=nms_iou_threshold)
+        
+        delegates = []
+        
+        if filepath.find("_edgetpu")>0:
+            delegates = [load_delegate(EDGETPU_SHARED_LIB)]
 
         # tflite model init
         self._interpreter = tf.lite.Interpreter(model_path=filepath,
-                                                experimental_delegates=[load_delegate(EDGETPU_SHARED_LIB)])
+                                                experimental_delegates=delegates)
         self._interpreter.allocate_tensors()
 
         # model details

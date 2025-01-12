@@ -22,10 +22,16 @@ EDGETPU_SHARED_LIB = {
 }[platform.system()]
 
 class DeepIDTFLite:
-    def __init__(self,filepath):
+    def __init__(self,filepath:str):
+        
+        delegates = []
+        
+        if filepath.find("_edgetpu")>0:
+            delegates = [load_delegate(EDGETPU_SHARED_LIB)]
+        
         # tflite model init
         self._interpreter = tf.lite.Interpreter(model_path=filepath,
-                                                experimental_delegates=[load_delegate(EDGETPU_SHARED_LIB)])
+                                                experimental_delegates=delegates)
         self._interpreter.allocate_tensors()
 
         # model details

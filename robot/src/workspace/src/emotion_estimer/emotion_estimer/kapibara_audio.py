@@ -32,14 +32,20 @@ OUTPUTS=5
 
 class KapibaraAudio:
     '''path - a path to a model'''
-    def __init__(self,path=None,tflite=False):
+    def __init__(self,path:str|None=None,tflite:bool=False):
         self.model=None
         if path is not None:
             if not tflite:
                 self.model=tf.keras.models.load_model(path)
             else:
+                
+                delegates=[]
+                
+                if path.find("_edgetpu")>0:
+                    delegates=[load_delegate(EDGETPU_SHARED_LIB)]
+                
                 self.model = Interpreter( model_path=path,
-                                         experimental_delegates=[load_delegate(EDGETPU_SHARED_LIB)])
+                                         experimental_delegates=delegates)
                 self.model.allocate_tensors()
                 self.input_details = self.model.get_input_details()
                 self.output_details = self.model.get_output_details()
