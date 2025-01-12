@@ -44,6 +44,8 @@ from emotion_estimer.midas import midasDepthEstimator
 from emotion_estimer.DeepIDTFLite import DeepIDTFLite
 from emotion_estimer.TFLiteFaceDetector import UltraLightFaceDetecion
 
+from emotion_estimer.face_data import FaceData,FaceObj
+
 
 from tiny_vectordb import VectorDatabase
 
@@ -253,12 +255,13 @@ class EmotionEstimator(Node):
         }])
         
         self.faces = self.face_database['faces']
-        
-        self.faces_score = {}
-        
-        self.load_faces()
+                
+        self.faces_score = FaceData(self.face_score_name)
         
         self.skip_frames_counter = 0
+        
+    def search_ids_to_num(self,ids:str)->int:
+        return int(ids[3:])
         
     def save_face_timer_callback(self):
         self.get_logger().debug("Saving face callback!")
@@ -308,20 +311,27 @@ class EmotionEstimator(Node):
             nearest_face = self.current_embeddings[0]
             
             search_ids, search_scores = self.faces.search(nearest_face[0],k=10)
+            
+            ids = self.search_ids_to_num(search_ids)
                     
             if len(search_scores)>0 and search_scores[0] >= 0.875:
-                face_score = self.faces_score[search_ids[0]]["score"]
                 
-                self.faces_score[search_ids[0]]["time"] = int(time.time())
+                face_obj:FaceObj = self.faces_score.get_face(ids)
                 
-                self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
+                if face_obj is not None:
+                                    
+                    face_score = face_obj.score
+                                        
+                    self.faces_score.update_face_time(ids)
+                    
+                    self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
                 
             for ids,score in zip(search_ids,search_scores):
                 if score >= 0.875:
-                    self.faces_score[ids]["time"] = int(time.time())
-            
-            self.save_faces_metadata()
-        
+                    _ids = self.search_ids_to_num(ids)
+                    
+                    self.faces_score.update_face_time(_ids)
+                    
         # anger
         # fear
         # happiness
@@ -606,8 +616,11 @@ class EmotionEstimator(Node):
                     search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
                     
                     if len(search_scores)>0 and search_scores[0] >= 0.875:
-                        # set emotion to a face
-                        self.faces_score[search_ids[0]] = self.generate_face_instance(score)
+                        
+                        ids = self.search_ids_to_num(search_ids[0])
+                        # set emotion to a face                        
+                        self.faces_score.update_face(ids,score)
+                        
                         self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
                         return
                     
@@ -615,25 +628,19 @@ class EmotionEstimator(Node):
                 ids = "ids"+str(faces_in_database+1)
                 # remove the oledest face when we got more than 500 elements in database
                 if len(self.faces)>500:
-                    sorted_faces = sorted(self.faces_score.items(),key = lambda x:x[1]["time"])
+                    oldest_face:FaceObj = self.faces_score.get_oldest_entry()
                     
-                    ids = sorted_faces[0]
-                    self.get_logger().info("Face with "+ids+" has been overwritten!")
+                    if oldest_face is not None:
+                        ids = oldest_face.id
+                        self.get_logger().info("Face with "+ids+" has been overwritten!")
+                        
+                        self.faces_score.update_face(ids,score)
+                        return
                 
-                self.faces.setBlock([ids],[nearest_face[0]])
-                self.faces_score[ids] = self.generate_face_instance(score)
+                self.faces.setBlock([ids],[nearest_face[0]])                
+                self.faces_score.add_face(faces_in_database+1,score)
                 self.get_logger().info("Face with "+ids+" has been added!")
                 
-                self.save_faces_metadata()
-                
-                                        
-    def generate_face_instance(self,score:float)->dict:   
-        
-        # a score attached to a face, time a UNIX timestamp when face was added
-        return  {
-            "score":score,
-            "time":int(time.time())
-        }
             
     def points_callback(self,points:PointCloud2):
         
@@ -734,35 +741,11 @@ class EmotionEstimator(Node):
         
         self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
         
-    def load_faces(self):
-        
-        try:        
-            with open(self.face_score_name,"r") as file:
-                self.faces_score = json.load(file)
-        except OSError:
-            self.get_logger().error("Cannot load faces score!!!")
-            
-    def save_faces_metadata(self):
-        
-        self.get_logger().info("Saving faces scores!")
-        
-        with open(self.face_score_name,'w') as file:
-            file.write(json.dumps(self.faces_score))
-            
-        self.get_logger().info("Faces scores saved!")
-        
-        
     def save_faces(self):
         
         self.get_logger().info("Saving faces embeddings!")
         
-        self.face_database.commit()
-        
-        self.get_logger().info("Faces embeddings saved!")
-        
-        self.save_faces_metadata()        
-        
-        
+        self.face_database.commit()        
 
 
 
