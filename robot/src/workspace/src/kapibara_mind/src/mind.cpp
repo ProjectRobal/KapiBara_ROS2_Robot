@@ -451,13 +451,13 @@ class KapiBaraMind : public rclcpp::Node
       "/imu", 10, std::bind(&KapiBaraMind::orientation_callback, this, _1));
 
         this->odometry_subscription = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/odom", 10, std::bind(&KapiBaraMind::odometry_callback, this, _1));
+      "/motors/odom", 10, std::bind(&KapiBaraMind::odometry_callback, this, _1));
 
         this->face_subscription = this->create_subscription<kapibara_interfaces::msg::FaceEmbed>(
       "/spoted_faces", 10, std::bind(&KapiBaraMind::face_callback, this, _1));
 
         this->points_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "/points", 10, std::bind(&KapiBaraMind::points_callback, this, _1));
+      "/midas/points", 10, std::bind(&KapiBaraMind::points_callback, this, _1));
 
         this->spectogram_subscription = this->create_subscription<sensor_msgs::msg::Image>(
       "/spectogram", 10, std::bind(&KapiBaraMind::spectogram_callback, this, _1));
