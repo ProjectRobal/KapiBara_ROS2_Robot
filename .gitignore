@@ -8,6 +8,9 @@ robot/src/workspace/build/*
 robot/src/workspace/sim_install/*
 robot/src/workspace/sim_build/*
 
+*.kac
+*.kac.sha256
+
 # C extensions
 *.so
 
