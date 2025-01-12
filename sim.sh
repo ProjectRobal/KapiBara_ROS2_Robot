@@ -12,7 +12,6 @@ docker compose -f compose_sim.yml up --remove-orphans
 
 elif [ "$arg" = "compile" ]; then
 
-# docker compose -f build_compose_sim.yml up
 docker compose -f compose_sim.yml run gazebo /app/cmd/build_packages.sh
 
 elif [ "$arg" = "purge" ]; then
@@ -43,10 +42,6 @@ elif [ "$arg" = "run" ]; then
 
 docker compose -f compose_sim.yml run gazebo /app/cmd/run_cmd.sh "${@:2}"
 
-elif [ "$arg" = "bash" ]; then
-
-docker compose -f compose_sim.yml run gazebo bash
-
 elif [ "$arg" = "debug" ]; then
 
 docker compose -f compose_sim.yml exec gazebo bash
@@ -66,5 +61,22 @@ docker compose -f compose_sim.yml exec gazebo /app/cmd/run_cmd.sh ros2 topic inf
 elif [ "$arg" = "publish" ]; then
 
 docker compose -f compose_sim.yml exec gazebo /app/cmd/run_cmd.sh ros2 topic pub --once "${@:2}"
+
+else
+
+echo "start - start a container"
+echo "compile - build all packages"
+echo "purge - remove containers"
+echo "rebuild - build image without caches"
+echo "build - build image"
+echo "cmd - run command in working container, in ros2 workspace"
+echo "logs - show container logs"
+echo "exec - general run command in working container"
+echo "run - run command in container"
+echo "debug - enter containter shell"
+echo "topics - list topics"
+echo "echo - show messages published on topic"
+echo "info - show topic info"
+echo "publish - publish message into specific topic"
 
 fi
