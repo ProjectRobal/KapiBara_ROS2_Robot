@@ -1,4 +1,11 @@
 #!/bin/bash
+
+# Run those to configure nvidia runtime:
+# sudo nvidia-ctk runtime configure --runtime=docker
+# sudo systemctl restart docker
+# sudo nvidia-ctk runtime configure --runtime=containerd
+# sudo systemctl restart containerd
+
 clear
 
 xhost local:docker
