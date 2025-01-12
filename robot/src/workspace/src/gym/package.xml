@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>gym</name>
+  <version>0.1.0</version>
+  <author>Patryk Peroński</author>
+  <description>A set of gymnasium envrionment in Gazebo.</description>
+  <license>TODO: License declaration</license>
+  <maintainer email="root@root.com">root</maintainer>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- <depend>protorl</depend>  -->
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
+  <depend>rosgraph_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>gazebo_msgs</depend>
+  <depend>kapibara_interfaces</depend>
+  <depend>kapibara</depend>
+  <depend>python3-numpy</depend>
+  <depend>python3-opencv</depend>
+  <depend>python3-gymnasium-pip</depend>
+
+  <depend>gazebo_ros_pkgs</depend>
+  <depend>gazebo_ros2_control</depend>
+  <depend>turtlesim</depend>
+  <depend>teleop_twist_keyboard</depend>
+  <depend>imu_tools</depend>
+  <depend>ros2_controllers</depend>
+  <depend>controller_manager</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <build_depend>xacro</build_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <gazebo_ros gazebo_model_path="${prefix}/.." />
+  </export>
+</package>

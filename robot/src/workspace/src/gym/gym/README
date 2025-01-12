@@ -1,0 +1,6 @@
+# ROS2 GYM
+
+## Directories:
+
+- environments - there will be stored all environments implemnetation, every environment will be derivied from gymnasium Env class.
+- utils - there will be stored additional usefull packages

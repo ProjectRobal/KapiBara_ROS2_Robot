@@ -1,0 +1,182 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="mouse_bot">
+
+  <xacro:arg name="name" default="mouse" />
+
+  <xacro:include filename="inertial_macros.xacro"/>
+
+  <!-- Link Definitions -->
+  <link name="base_link">
+    <xacro:inertial_box mass="1" x="0.5" y="0.5" z="0.5" >
+            <origin xyz="0.0 0 0.0" rpy="0 0 0" />
+        </xacro:inertial_box>
+    <visual>
+      <geometry>
+        <box size="0.5 0.5 0.5"/>
+      </geometry>
+      <material name="red"/>
+    </visual>
+    <collision name="base_link_collision_$(arg name)">
+      <geometry>
+        <box size="0.5 0.5 0.5"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <gazebo reference="base_link">
+      <material>Gazebo/Red</material>
+
+      <!-- <sensor type="contact" name="contact_sensor">
+        <always_on>true</always_on>
+        <update_rate>100</update_rate>
+        <contact>
+          <collision>base_link_collision_$(arg name)_collision</collision>
+        </contact>
+        <plugin name="bumper_plugin_$(arg name)" filename="libgazebo_ros_bumper.so">
+            <alwaysOn>true</alwaysOn>
+            <frameName>base_link</frameName>
+            <ros>
+              <remapping>bumper_states:=collision</remapping>
+            </ros>
+        </plugin>
+      </sensor> -->
+  </gazebo>
+
+  <link name="left_wheel_link">
+    <xacro:inertial_cylinder mass="0.2" radius="0.1" length="0.1">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+    </xacro:inertial_cylinder>
+    <!-- <visual>
+      <geometry>
+        <cylinder length="0.1" radius="0.1"/>
+      </geometry>
+      <material name="black"/>
+    </visual> -->
+    <collision>
+      <geometry>
+        <cylinder length="0.1" radius="0.1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <gazebo reference="left_wheel_link">
+        <material>Gazebo/Black</material>
+  </gazebo>
+
+  <link name="right_wheel_link">
+    <xacro:inertial_cylinder mass="0.2" radius="0.1" length="0.1">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+    </xacro:inertial_cylinder>
+    <!-- <visual>
+      <geometry>
+        <cylinder length="0.1" radius="0.1"/>
+      </geometry>
+      <material name="black"/>
+    </visual> -->
+    <collision>
+      <geometry>
+        <cylinder length="0.1" radius="0.1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <gazebo reference="right_wheel_link">
+        <material>Gazebo/Black</material>
+  </gazebo>
+
+  <link name="caster_wheel_link">
+    <xacro:inertial_sphere mass="0.1" radius="0.1">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+    </xacro:inertial_sphere>
+    <!-- <visual>
+      <geometry>
+        <sphere radius="0.1"/>
+      </geometry>
+      <material name="grey"/>
+    </visual> -->
+    <collision>
+      <geometry>
+        <sphere radius="0.1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <gazebo reference="caster_wheel_link">
+        <material>Gazebo/Black</material>
+        <mu1 value="0.01"/>
+        <mu2 value="0.01"/>
+  </gazebo>
+
+  <!-- Joint Definitions -->
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel_link"/>
+    <origin xyz="-0.25 0.3 -0.19" rpy="${pi/2} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel_link"/>
+    <origin xyz="-0.25 -0.3 -0.19" rpy="${pi/2} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <joint name="front_laser_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="front_laser_link"/>
+        <origin xyz="-0.25 0.0 0.04" rpy="0 0 ${pi}"/>
+    </joint>
+
+    <link name="front_laser_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01" />
+            </geometry>
+            <material name="red" />
+        </visual>
+    </link>
+
+  <xacro:include filename="lasers_def.xacro" />
+
+  <xacro:laser_sensor sensor_name="front" name="$(arg name)" />
+
+  <joint name="caster_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="caster_wheel_link"/>
+    <origin xyz="0.22 0 -0.20"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <!-- ros2_control Configuration -->
+  <ros2_control name="GazeboSystem_$(arg name)" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+      <joint name="left_wheel_joint">
+        <command_interface name="velocity" />
+        <state_interface name="velocity" />
+        <state_interface name="position" />
+      </joint>
+      <joint name="right_wheel_joint">
+        <command_interface name="velocity" />
+        <state_interface name="velocity" />
+        <state_interface name="position" />
+      </joint>
+  </ros2_control>
+
+  <!-- Gazebo Configuration -->
+  <gazebo>
+    <plugin name="$(arg name)_gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <ros>
+        <namespace>$(arg name)</namespace>
+        <remapping>/tf:=/$(arg name)/tf</remapping>
+        <remapping>/tf_static:=/$(arg name)/tf_static</remapping>
+      </ros>
+      <robot_param_node>/$(arg name)/robot_state_publisher</robot_param_node>
+      <parameters>$(find gym)/config/my_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+  
+
+</robot>
