@@ -107,7 +107,7 @@ class FaceData:
         
         cursor = self.db.cursor()
         
-        query = "SELECT * FROM FACE ORDER BY CREATION_TIME ASC;"
+        query = "SELECT * FROM FACE ORDER BY CREATION_TIME ASC LIMIT 1;"
         
         self.logger.debug(query)
         
@@ -185,9 +185,12 @@ class FaceData:
             cursor.close()
         except sqlite3.Error as error:
             self.logger.error("Error occured when removing face: "+str(error))
+            
+    def commit(self):
+        self.db.commit()
         
     def __del__(self):
-        self.db.commit()
+        self.commit()
         
         
         

@@ -241,6 +241,8 @@ class EmotionEstimator(Node):
                 
         self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
         
+        self.face_commit_timer = self.create_timer(60*30, self.commit_faces)
+        
         # each 30 minutes
         self.save_face_timer = self.create_timer(30*60, self.save_face_timer_callback)
         
@@ -259,6 +261,10 @@ class EmotionEstimator(Node):
         self.faces_score = FaceData(self.face_score_name)
         
         self.skip_frames_counter = 0
+        
+    def commit_faces(self):
+        self.face_database.commit()
+        self.faces_score.commit()
         
     def search_ids_to_num(self,ids:str)->int:
         return int(ids[3:])
