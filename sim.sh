@@ -12,7 +12,7 @@ docker compose -f compose_sim.yml up --remove-orphans
 
 elif [ "$arg" = "compile" ]; then
 
-docker compose -f compose_sim.yml run gazebo /app/cmd/build_packages.sh
+docker compose -f compose_sim.yml run gazebo /app/cmd/build_packages.sh camera_ros
 
 elif [ "$arg" = "purge" ]; then
 

@@ -2,104 +2,117 @@
 Changelog for package gazebo_ros2_control
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.6.7 (2024-07-02)
+0.4.10 (2024-09-17)
+-------------------
+* Add support for getting PID parameters from loaded parameters (`#374 <https://github.com/ros-controls/gazebo_ros2_control//issues/374>`_) (`#375 <https://github.com/ros-controls/gazebo_ros2_control//issues/375>`_)
+  Co-authored-by: Christoph Fröhlich <christophfroehlich@users.noreply.github.com>
+  Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
+  (cherry picked from commit 6a4cc84344ed1a86807dc77f23f199598a205296)
+  Co-authored-by: Sai Kishor Kothakota <saisastra3@gmail.com>
+* Add `hold_joints` parameter (backport `#251 <https://github.com/ros-controls/gazebo_ros2_control//issues/251>`_) (`#353 <https://github.com/ros-controls/gazebo_ros2_control//issues/353>`_)
+  Co-authored-by: Christoph Froehlich <christoph.froehlich@ait.ac.at>
+* Contributors: mergify[bot]
+
+0.4.9 (2024-07-02)
 ------------------
-* Initialize antiwindup variable properly (`#326 <https://github.com/ros-controls/gazebo_ros2_control/issues/326>`_) (`#328 <https://github.com/ros-controls/gazebo_ros2_control/issues/328>`_)
+* Initialize antiwindup variable properly (`#326 <https://github.com/ros-controls/gazebo_ros2_control/issues/326>`_) (`#327 <https://github.com/ros-controls/gazebo_ros2_control/issues/327>`_)
   (cherry picked from commit 1ef9652ac34ed883dbf8fed27bcf393f78f53d52)
   Co-authored-by: Christoph Fröhlich <christophfroehlich@users.noreply.github.com>
 * Contributors: mergify[bot]
 
-0.6.6 (2024-05-14)
+0.4.8 (2024-05-14)
 ------------------
-* Add PID controller to control joint using effort (`#294 <https://github.com/ros-controls/gazebo_ros2_control//issues/294>`_) (`#311 <https://github.com/ros-controls/gazebo_ros2_control//issues/311>`_)
+* Add PID controller to control joint using effort (`#294 <https://github.com/ros-controls/gazebo_ros2_control//issues/294>`_)
   Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
   Co-authored-by: Christoph Fröhlich <christophfroehlich@users.noreply.github.com>
-  (cherry picked from commit f769c6c1684eb2ccb3e4988ad4611b32b4beabf6)
-  Co-authored-by: chameau5050 <54971185+chameau5050@users.noreply.github.com>
-* Update precommit config (`#298 <https://github.com/ros-controls/gazebo_ros2_control//issues/298>`_) (`#302 <https://github.com/ros-controls/gazebo_ros2_control//issues/302>`_)
+* Update precommit config (`#298 <https://github.com/ros-controls/gazebo_ros2_control//issues/298>`_) (`#301 <https://github.com/ros-controls/gazebo_ros2_control//issues/301>`_)
   Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
   (cherry picked from commit 105c0ba5b786a43e1e9266399ab027a12011c643)
   Co-authored-by: Christoph Fröhlich <christophfroehlich@users.noreply.github.com>
-* Fix incorrect force-torque sensor vec population (`#296 <https://github.com/ros-controls/gazebo_ros2_control//issues/296>`_) (`#300 <https://github.com/ros-controls/gazebo_ros2_control//issues/300>`_)
+* Fix incorrect force-torque sensor vec population (`#296 <https://github.com/ros-controls/gazebo_ros2_control//issues/296>`_) (`#299 <https://github.com/ros-controls/gazebo_ros2_control//issues/299>`_)
   (cherry picked from commit fdcd7aa8c67ea57f44bbf2f8fba90a28d7f04b5d)
   Co-authored-by: Mateus Menezes <mateusmenezes95@gmail.com>
-* Contributors: mergify[bot]
+* Contributors: chameau5050, mergify[bot]
 
-0.6.5 (2024-03-21)
+0.4.7 (2024-03-21)
 ------------------
-* Update gazebo_ros2_control_plugin.cpp (`#286 <https://github.com/ros-controls/gazebo_ros2_control/issues/286>`_) (`#288 <https://github.com/ros-controls/gazebo_ros2_control/issues/288>`_)
+* Update gazebo_ros2_control_plugin.cpp (`#286 <https://github.com/ros-controls/gazebo_ros2_control/issues/286>`_) (`#287 <https://github.com/ros-controls/gazebo_ros2_control/issues/287>`_)
   (cherry picked from commit 5e1f9a52bcd1bf4164186dbb3c8b5cf070ed156e)
   Co-authored-by: Tobias Fischer <info@tobiasfischer.info>
-* set the robot description parameter (`#277 <https://github.com/ros-controls/gazebo_ros2_control/issues/277>`_) (`#284 <https://github.com/ros-controls/gazebo_ros2_control/issues/284>`_)
-  (cherry picked from commit 7f23568a31ec812c3745af89d1f3bc54ac787af0)
-  Co-authored-by: AB <banonran@gmx.de>
-* Fix crashing due to an invalid parameter in the initial value. (backport `#271 <https://github.com/ros-controls/gazebo_ros2_control/issues/271>`_) (`#283 <https://github.com/ros-controls/gazebo_ros2_control/issues/283>`_)
+* set the robot description parameter (`#277 <https://github.com/ros-controls/gazebo_ros2_control/issues/277>`_)
+* Fix crashing due to an invalid parameter in the initial value. (backport `#271 <https://github.com/ros-controls/gazebo_ros2_control/issues/271>`_) (`#282 <https://github.com/ros-controls/gazebo_ros2_control/issues/282>`_)
   * Fix crashing due to an invalid parameter in the initial value. (`#271 <https://github.com/ros-controls/gazebo_ros2_control/issues/271>`_)
   Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
   (cherry picked from commit cdae6b8a8f638d87146482e99bf76cf36530e5a6)
-  # Conflicts:
-  #	gazebo_ros2_control/src/gazebo_system.cpp
-  * Fixed crash
-  ---------
   Co-authored-by: Wiktor Bajor <69388767+Wiktor-99@users.noreply.github.com>
   Co-authored-by: Alejandro Hernandez Cordero <ahcorde@gmail.com>
-* Contributors: mergify[bot]
+* Contributors: AB, mergify[bot]
 
-0.6.4 (2024-01-24)
+0.4.6 (2024-01-24)
 ------------------
-* Load the URDF to the resource_manager before parsing it to CM  (`#262 <https://github.com/ros-controls/gazebo_ros2_control//issues/262>`_) (`#267 <https://github.com/ros-controls/gazebo_ros2_control//issues/267>`_)
+* Load the URDF to the resource_manager before parsing it to CM  (`#262 <https://github.com/ros-controls/gazebo_ros2_control//issues/262>`_) (`#266 <https://github.com/ros-controls/gazebo_ros2_control//issues/266>`_)
   * Load the URDF to the resource_manager before parsing it to CM constructor (fixes https://github.com/ros-controls/ros2_control/issues/1299)
   (cherry picked from commit f5baf71c4c7cb3c0a0af52f988c107b356c95ed0)
   Co-authored-by: Sai Kishor Kothakota <saisastra3@gmail.com>
   Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
-* Fix links in documentation (`#263 <https://github.com/ros-controls/gazebo_ros2_control//issues/263>`_) (`#265 <https://github.com/ros-controls/gazebo_ros2_control//issues/265>`_)
+* Fix links in documentation (`#263 <https://github.com/ros-controls/gazebo_ros2_control//issues/263>`_) (`#264 <https://github.com/ros-controls/gazebo_ros2_control//issues/264>`_)
   (cherry picked from commit d44b879615a539fc7c6c53707ec518df7bfd4f47)
   Co-authored-by: Silvio Traversaro <silvio@traversaro.it>
 * Contributors: mergify[bot]
 
-0.6.3 (2024-01-04)
+0.4.5 (2024-01-04)
 ------------------
-* Fix stuck passive joints (`#237 <https://github.com/ros-controls/gazebo_ros2_control/issues/237>`_)
-* Contributors: Johannes Huemer
+* Fix stuck passive joints (`#237 <https://github.com/ros-controls/gazebo_ros2_control/issues/237>`_) (`#238 <https://github.com/ros-controls/gazebo_ros2_control/issues/238>`_)
+  (cherry picked from commit 5dba0f95a03b136f39145c846ec5ebbfb5a09599)
+  Co-authored-by: Johannes Huemer <johannes.huemer@ait.ac.at>
+* Contributors: mergify[bot]
 
-0.6.2 (2023-08-23)
+0.4.4 (2023-08-21)
 ------------------
-* Catch pluginlib exceptions (`#229 <https://github.com/ros-controls/gazebo_ros2_control/issues/229>`_)
+* Catch pluginlib exceptions (backport `#229 <https://github.com/ros-controls/gazebo_ros2_control/issues/229>`_) (`#230 <https://github.com/ros-controls/gazebo_ros2_control/issues/230>`_)
+  * Catch pluginlib exceptions (`#229 <https://github.com/ros-controls/gazebo_ros2_control/issues/229>`_)
   Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
-* Set the C++ version to 17 (`#221 <https://github.com/ros-controls/gazebo_ros2_control/issues/221>`_)
-* Removed unused var (`#220 <https://github.com/ros-controls/gazebo_ros2_control/issues/220>`_)
-* Remove plugin export from ROS 1 (`#212 <https://github.com/ros-controls/gazebo_ros2_control/issues/212>`_)
-* Forced zero vel in position mode to avoid sagging (`#213 <https://github.com/ros-controls/gazebo_ros2_control/issues/213>`_)
-* Contributors: Alejandro Hernández Cordero, Christoph Fröhlich, gwalck
-
-0.6.1 (2023-06-09)
-------------------
-* Add pre-commit and CI-format (`#206 <https://github.com/ros-controls/gazebo_ros2_control/issues/206>`_)
+  (cherry picked from commit f8a475d3092e67b77846d76738ffad0861c680c1)
+* Set the C++ version to 17 (`#221 <https://github.com/ros-controls/gazebo_ros2_control/issues/221>`_) (`#228 <https://github.com/ros-controls/gazebo_ros2_control/issues/228>`_)
+  (cherry picked from commit 6da415cf82a75e2a5e9f9a41400957ad45b2be84)
+  Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
+* Removed unused var (`#220 <https://github.com/ros-controls/gazebo_ros2_control/issues/220>`_) (`#226 <https://github.com/ros-controls/gazebo_ros2_control/issues/226>`_)
+  (cherry picked from commit 174e6b85f82774e9e802a5540382999066734421)
+  Co-authored-by: Alejandro Hernández Cordero <ahcorde@gmail.com>
+* Remove plugin export from ROS 1 (`#212 <https://github.com/ros-controls/gazebo_ros2_control/issues/212>`_) (`#215 <https://github.com/ros-controls/gazebo_ros2_control/issues/215>`_)
+  (cherry picked from commit c15af63cb036cd1f36cffbc56e5e5bdb5224c7e2)
+  Co-authored-by: Christoph Fröhlich <christophfroehlich@users.noreply.github.com>
+* Forced zero vel in position mode to avoid sagging (`#213 <https://github.com/ros-controls/gazebo_ros2_control/issues/213>`_) (`#214 <https://github.com/ros-controls/gazebo_ros2_control/issues/214>`_)
+  (cherry picked from commit 3e950618a1f82c72097f7c90a6b5d2ea2e32b7b8)
+  Co-authored-by: gwalck <guillaume.walck@stoglrobotics.de>
+* Various bug fixes (`#177 <https://github.com/ros-controls/gazebo_ros2_control/issues/177>`_) (`#208 <https://github.com/ros-controls/gazebo_ros2_control/issues/208>`_)
+  Co-authored-by: AndyZe <andyz@utexas.edu>
+* Add pre-commit and CI-format (`#206 <https://github.com/ros-controls/gazebo_ros2_control/issues/206>`_) (`#207 <https://github.com/ros-controls/gazebo_ros2_control/issues/207>`_)
   * Add pre-commit and ci-format
-* Compile with ROS iron and rolling (`#202 <https://github.com/ros-controls/gazebo_ros2_control/issues/202>`_)
-* Contributors: Alejandro Hernández Cordero, Christoph Fröhlich
+  (cherry picked from commit f2cf686a1a97cefc9b5e3daa115e0c4854ea5707)
+  Co-authored-by: Christoph Fröhlich <christophfroehlich@users.noreply.github.com>
+* Contributors: Alejandro Hernández Cordero, Christoph Fröhlich, mergify[bot]
 
-0.6.0 (2023-05-23)
+0.4.3 (2023-05-23)
 ------------------
-* add copy operator to SafeEnum (`#197 <https://github.com/ros-controls/gazebo_ros2_control/issues/197>`_)
-* Fixed rolling compilation (`#195 <https://github.com/ros-controls/gazebo_ros2_control/issues/195>`_)
-* Export all dependencies (`#183 <https://github.com/ros-controls/gazebo_ros2_control/issues/183>`_) (`#184 <https://github.com/ros-controls/gazebo_ros2_control/issues/184>`_)
-* Contributors: Alejandro Hernández Cordero, Noel Jiménez García, Adrian Zwiener
+* add copy operator to SafeEnum (`#197 <https://github.com/ros-controls/gazebo_ros2_control/issues/197>`_) (`#198 <https://github.com/ros-controls/gazebo_ros2_control/issues/198>`_)
+* Contributors: mergify[bot]
 
-0.5.1 (2023-02-07)
+0.4.2 (2023-03-02)
 ------------------
-* Various bug fixes (`#177 <https://github.com/ros-controls/gazebo_ros2_control/issues/177>`_)
-* Contributors: AndyZe
+* Export all dependencies (`#183 <https://github.com/ros-controls/gazebo_ros2_control/issues/183>`_)
+  The ament_export_dependencies exports dependencies to downstream
+  packages. This is necessary so that the user of the library does
+  not have to call find_package for those dependencies.
+* Contributors: Adrian Zwiener
 
-0.5.0 (2023-01-06)
+0.4.1 (2023-02-07)
 ------------------
 * Force setting use_sim_time parameter when using plugin. (`#171 <https://github.com/ros-controls/gazebo_ros2_control/issues/171>`_)
-* Improve error message if robot_description\_ param is wrong (`#168 <https://github.com/ros-controls/gazebo_ros2_control/issues/168>`_)
-* Rename hw info class type to plugin name (`#169 <https://github.com/ros-controls/gazebo_ros2_control/issues/169>`_)
 * Removed warning (`#162 <https://github.com/ros-controls/gazebo_ros2_control/issues/162>`_)
 * Mimic joint should have the same control mode as mimicked joint. (`#154 <https://github.com/ros-controls/gazebo_ros2_control/issues/154>`_)
 * Enable loading params from multiple yaml files (`#149 <https://github.com/ros-controls/gazebo_ros2_control/issues/149>`_)
-* Contributors: Alejandro Hernández Cordero, Christoph Fröhlich, Denis Štogl, Tony Najjar
+* Contributors: Alejandro Hernández Cordero, Denis Štogl, Tony Najjar
 
 0.4.0 (2022-08-09)
 ------------------

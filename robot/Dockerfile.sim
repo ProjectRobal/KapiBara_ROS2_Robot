@@ -23,4 +23,4 @@ RUN mkdir -p /app/src/workspace
 
 RUN chmod -R a+x /app/cmd
 
-CMD [ "/entrypoint.sh" ]
+CMD [ "/entrypoint_sim.sh" ]

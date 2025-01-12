@@ -157,7 +157,7 @@ class KapiBaraMind : public rclcpp::Node
 
             auto layer = std::make_shared<KapiBara_SubLayer>();
 
-            layer.set_trainable(false);
+            layer->set_trainable(false);
     
             // auto sub_layer2 = std::make_shared<snn::LayerKAC<128,64,20,snn::ReLu>>();
 
@@ -365,11 +365,11 @@ class KapiBaraMind : public rclcpp::Node
 
         this->arbiter.applyReward(reward);
 
-        this->layers[this->max_iter].applyReward(reward);
+        this->layers[this->max_iter]->applyReward(reward);
 
         this->arbiter.shuttle();
 
-        this->layers[this->max_iter].shuttle();
+        this->layers[this->max_iter]->shuttle();
 
 
         const snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);

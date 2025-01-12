@@ -1,2 +1,2 @@
-ros-humble-gazebo-ros-packages
+ros-humble-gazebo-ros-pkgs
 ros-humble-gazebo-msgs

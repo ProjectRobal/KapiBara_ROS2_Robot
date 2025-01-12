@@ -84,7 +84,7 @@ namespace snn
         {
             while(ptr<layers.size())
             {
-                if(layer->get_trainable())
+                if(layers[ptr]->get_trainable())
                 {
                     layers[ptr]->shuttle();
                 }

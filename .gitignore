@@ -5,6 +5,8 @@ __pycache__/
 robot/src/workspace/log/*
 robot/src/workspace/install/*
 robot/src/workspace/build/*
+robot/src/workspace/sim_install/*
+robot/src/workspace/sim_build/*
 
 # C extensions
 *.so

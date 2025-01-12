@@ -35,7 +35,6 @@ ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
   script/depth.py
-  script/run.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 
