@@ -14,4 +14,7 @@ To run simulation:
 - ./sim.sh compile - to compile all packages
 - ./sim.sh start - to run containter
 
-- ![KapiBara robot](https://github.com/user-attachments/assets/a82f75d7-b666-4903-8bbd-9410d6dbb5d1)
+## KapiBara robot:
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/a82f75d7-b666-4903-8bbd-9410d6dbb5d1" alt="KapiBara robot" width="400">
+</div>
