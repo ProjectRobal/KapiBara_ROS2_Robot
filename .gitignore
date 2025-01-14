@@ -11,6 +11,9 @@ robot/src/workspace/sim_build/*
 *.kac
 *.kac.sha256
 
+*.kac.bak
+*.kac.bak.sha256
+
 # C extensions
 *.so
 
