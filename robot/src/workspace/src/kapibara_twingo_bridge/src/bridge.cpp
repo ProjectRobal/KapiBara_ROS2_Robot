@@ -114,9 +114,9 @@ void clear_ack_filter()
 void can_task(std::shared_ptr<BridgeNode> node)
 {
 
-    rclcpp::Publisher<kapibara_interfaces::msg::PiezoSense>::SharedPtr sense_publisher = node->create_publisher<kapibara_interfaces::msg::PiezoSense>("/sense",10);
+    rclcpp::Publisher<kapibara_interfaces::msg::PiezoSense>::SharedPtr sense_publisher = node->create_publisher<kapibara_interfaces::msg::PiezoSense>("sense",10);
 
-    rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("/ping",10);
+    rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("ping",10);
 
 
     while(1)

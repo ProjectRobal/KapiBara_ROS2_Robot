@@ -121,22 +121,22 @@ void clear_ack_filter()
 void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 {
 
-    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher = node->create_publisher<sensor_msgs::msg::Imu>("/imu",10);
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher = node->create_publisher<sensor_msgs::msg::Imu>("imu",10);
 
-    rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_publisher = node->create_publisher<sensor_msgs::msg::MagneticField>("/mag",10);
+    rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_publisher = node->create_publisher<sensor_msgs::msg::MagneticField>("mag",10);
 
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr tofs[tofCount];
 
-    std::string tof_topic="/distance_";
+    std::string tof_topic="distance_";
 
     for(uint8_t i=0;i<tofCount;++i)
     {
         tofs[i] = node->create_publisher<sensor_msgs::msg::Range>(tof_topic+std::to_string(i),10);
     }
 
-    rclcpp::Publisher<kapibara_interfaces::msg::EncodersAndSpeed>::SharedPtr encoders_publisher = node->create_publisher<kapibara_interfaces::msg::EncodersAndSpeed>("/encoders",10);
+    rclcpp::Publisher<kapibara_interfaces::msg::EncodersAndSpeed>::SharedPtr encoders_publisher = node->create_publisher<kapibara_interfaces::msg::EncodersAndSpeed>("encoders",10);
 
-    rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("/ping",10);
+    rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("ping",10);
 
 
     while(1)

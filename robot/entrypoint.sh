@@ -12,7 +12,7 @@ cd /app/src
 
 # rosdep update
 
-pip3 install --upgrade pip 
+# pip3 install --upgrade pip 
 
 # rosdep install --from-paths /app/src/workspace/src --ignore-src  -r -y -q
 

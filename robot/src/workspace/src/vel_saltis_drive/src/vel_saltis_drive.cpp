@@ -78,7 +78,7 @@ namespace vel_saltis_drive
 
         this->_node = std::make_shared<rclcpp::Node>("encoder_client");
 
-        this->encoder_sub = this->_node->create_subscription<kapibara_interfaces::msg::EncodersAndSpeed>("/encoders", 10, std::bind(&VelSaltisDrive::encoder_callback, this, std::placeholders::_1));
+        this->encoder_sub = this->_node->create_subscription<kapibara_interfaces::msg::EncodersAndSpeed>("encoders", 10, std::bind(&VelSaltisDrive::encoder_callback, this, std::placeholders::_1));
 
         // this->can_task = std::thread([this](){this->read_from_can();});
 

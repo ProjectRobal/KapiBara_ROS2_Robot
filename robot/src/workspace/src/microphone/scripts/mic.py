@@ -30,7 +30,7 @@ class MicrophoneNode(Node):
         self.declare_parameter('chunk_size', 1600)
         self.declare_parameter('device_id', 1)
         
-        self.mic_publisher = self.create_publisher(Microphone, "/mic", 10)
+        self.mic_publisher = self.create_publisher(Microphone, "mic", 10)
         
         self.audio = pyaudio.PyAudio()
         

@@ -448,26 +448,26 @@ class KapiBaraMind : public rclcpp::Node
         // add all required subscriptions
 
         this->orientation_subscription = this->create_subscription<sensor_msgs::msg::Imu>(
-      "/imu", 10, std::bind(&KapiBaraMind::orientation_callback, this, _1));
+      "imu", 10, std::bind(&KapiBaraMind::orientation_callback, this, _1));
 
         this->odometry_subscription = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/motors/odom", 10, std::bind(&KapiBaraMind::odometry_callback, this, _1));
+      "motors/odom", 10, std::bind(&KapiBaraMind::odometry_callback, this, _1));
 
         this->face_subscription = this->create_subscription<kapibara_interfaces::msg::FaceEmbed>(
-      "/spoted_faces", 10, std::bind(&KapiBaraMind::face_callback, this, _1));
+      "spoted_faces", 10, std::bind(&KapiBaraMind::face_callback, this, _1));
 
         this->points_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "/midas/points", 10, std::bind(&KapiBaraMind::points_callback, this, _1));
+      "midas/points", 10, std::bind(&KapiBaraMind::points_callback, this, _1));
 
         this->spectogram_subscription = this->create_subscription<sensor_msgs::msg::Image>(
-      "/spectogram", 10, std::bind(&KapiBaraMind::spectogram_callback, this, _1));
+      "spectogram", 10, std::bind(&KapiBaraMind::spectogram_callback, this, _1));
 
         this->emotions_subscription = this->create_subscription<kapibara_interfaces::msg::Emotions>(
-      "/emotions", 10, std::bind(&KapiBaraMind::emotions_callback, this, _1));
+      "emotions", 10, std::bind(&KapiBaraMind::emotions_callback, this, _1));
 
         // one publisher for ros2 control cmd
 
-        this->twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("/motors/cmd_vel_unstamped", 10);
+        this->twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("motors/cmd_vel_unstamped", 10);
     }
 
     snn::SIMDVectorLite<64> fire_network(const snn::SIMDVectorLite<680>& input)

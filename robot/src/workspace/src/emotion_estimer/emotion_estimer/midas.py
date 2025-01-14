@@ -23,13 +23,13 @@ EDGETPU_SHARED_LIB = {
 # model page: https://huggingface.co/qualcomm/Midas-V2
 class midasDepthEstimator():
 
-	def __init__(self):
+	def __init__(self,modelPath:str):
 		self.fps = 0
 		self.timeLastPrediction = time.time()
 		self.frameCounter = 0
 
 		# Initialize model
-		self.initializeModel()
+		self.initializeModel(modelPath)
 
 
 	def initializeModel(self,modelPath:str):

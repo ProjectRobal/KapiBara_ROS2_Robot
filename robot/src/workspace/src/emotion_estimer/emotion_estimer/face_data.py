@@ -72,7 +72,6 @@ class FaceData:
             cursor.execute(query)
                 
             result = cursor.fetchall()
-            print(result)
             
             cursor.close()
         except sqlite3.Error as error:
@@ -87,9 +86,7 @@ class FaceData:
         query = "SELECT * FROM FACE WHERE ID = "+str(id)+";"
         
         self.logger.debug(query)
-        
-        print(query)
-        
+                
         cursor.execute(query)
             
         result = cursor.fetchall()
@@ -110,9 +107,7 @@ class FaceData:
         query = "SELECT * FROM FACE ORDER BY CREATION_TIME ASC LIMIT 1;"
         
         self.logger.debug(query)
-        
-        print(query)
-        
+                
         cursor.execute(query)
             
         result = cursor.fetchall()

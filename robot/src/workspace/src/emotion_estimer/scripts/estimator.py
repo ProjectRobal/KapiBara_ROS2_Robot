@@ -58,7 +58,7 @@ class EmotionEstimator(Node):
         
         self.id_to_emotion_name = ["angry","fear","happiness","uncertainty","boredom"]
         
-        self.declare_parameter('camera_topic', '/camera/image_raw/compressed',descriptor=ParameterDescriptor(name='camera_topic', type=0, description="A topic to subscribe for compressed image"))
+        self.declare_parameter('camera_topic', 'camera/image_raw/compressed',descriptor=ParameterDescriptor(name='camera_topic', type=0, description="A topic to subscribe for compressed image"))
         
         self.declare_parameter('range_threshold', 0.1)
         self.declare_parameter('accel_threshold', 10.0)
@@ -72,22 +72,22 @@ class EmotionEstimator(Node):
         
         # a topic to send ears position
         
-        self.declare_parameter('ears_topic','/ears_controller/commands')
+        self.declare_parameter('ears_topic','ears_controller/commands')
         
         # a list of topics of tof sensors
-        self.declare_parameter('points_topic', '/midas/points' )
+        self.declare_parameter('points_topic', 'midas/points' )
         
         # a orientation callback
-        self.declare_parameter('imu', '/imu')
+        self.declare_parameter('imu', 'imu')
         
         # a topic to listen for audio from microphone
-        self.declare_parameter('mic', '/mic')
+        self.declare_parameter('mic', 'mic')
         
         # a topic to listen for odometry 
-        self.declare_parameter('odom','/motors/odom')
+        self.declare_parameter('odom','motors/odom')
         
         # piezo sense sensors
-        self.declare_parameter('sense_topic', '/sense')
+        self.declare_parameter('sense_topic', 'sense')
         
         # face database file
         self.declare_parameter('face_db', '/app/src/face')
@@ -107,7 +107,7 @@ class EmotionEstimator(Node):
         
         self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
        
-        self.emotion_publisher = self.create_publisher(Emotions,"/emotions",10)
+        self.emotion_publisher = self.create_publisher(Emotions,"emotions",10)
         
         model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('audio_model').get_parameter_value().string_value)
         
@@ -144,12 +144,12 @@ class EmotionEstimator(Node):
         
         self.get_logger().info('Model initialized!')
         
-        self.depth_publisher = self.create_publisher(CompressedImage, '/midas/depth/compressed', 10)
-        self.depth_publisher_raw = self.create_publisher(Image, '/midas/depth', 10)
+        self.depth_publisher = self.create_publisher(CompressedImage, 'midas/depth/compressed', 10)
+        self.depth_publisher_raw = self.create_publisher(Image, 'midas/depth', 10)
         
-        self.depth_point_publisher = self.create_publisher(PointCloud2,'/midas/points',10)
+        self.depth_point_publisher = self.create_publisher(PointCloud2,'midas/points',10)
         
-        self.spectogram_publisher = self.create_publisher(Image, '/spectogram', 10)
+        self.spectogram_publisher = self.create_publisher(Image, 'spectogram', 10)
         
         self.subscription = self.create_subscription(
             CompressedImage,
@@ -211,7 +211,7 @@ class EmotionEstimator(Node):
         self.odom_subscripe = self.create_subscription(Odometry,odom_topic,self.odom_callback,10)
         
         self.get_logger().info("Creating publisher for spoted faces")
-        self.face_publisher = self.create_publisher(FaceEmbed, '/spoted_faces', 10)
+        self.face_publisher = self.create_publisher(FaceEmbed, 'spoted_faces', 10)
         
         # Point Cloud 2 callbck
         
@@ -318,19 +318,20 @@ class EmotionEstimator(Node):
             
             search_ids, search_scores = self.faces.search(nearest_face[0],k=10)
             
-            ids = self.search_ids_to_num(search_ids)
+            if len(search_ids) != 0:
+                ids = self.search_ids_to_num(search_ids[0])
+                        
+                if len(search_scores)>0 and search_scores[0] >= 0.875:
                     
-            if len(search_scores)>0 and search_scores[0] >= 0.875:
-                
-                face_obj:FaceObj = self.faces_score.get_face(ids)
-                
-                if face_obj is not None:
-                                    
-                    face_score = face_obj.score
+                    face_obj:FaceObj = self.faces_score.get_face(ids)
+                    
+                    if face_obj is not None:
                                         
-                    self.faces_score.update_face_time(ids)
-                    
-                    self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
+                        face_score = face_obj.score
+                                            
+                        self.faces_score.update_face_time(ids)
+                        
+                        self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
                 
             for ids,score in zip(search_ids,search_scores):
                 if score >= 0.875:
