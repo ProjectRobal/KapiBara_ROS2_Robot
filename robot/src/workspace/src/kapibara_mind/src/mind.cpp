@@ -14,6 +14,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+
 // quanterion
 #include <sensor_msgs/msg/imu.hpp>
 // 2d depth points
@@ -81,13 +83,14 @@ size_t snn::LayerCounter::LayerIDCounter = 0;
     spectogram 16x16 - 256 values
     2d points array from camera, compressed to 16x16 - 256 values
 
-    Total 680 values
+    Total 686 values
 
 
 */
 
 using std::placeholders::_1;
 
+using namespace std::chrono_literals;
 
 #define MEMBERS_COUNT (64u)
 
@@ -102,7 +105,7 @@ class KapiBaraMind : public rclcpp::Node
 
     size_t max_iter;
 
-    std::shared_ptr<snn::LayerKAC<680,96,20>> encoder;
+    std::shared_ptr<snn::LayerKAC<686,96,20>> encoder;
 
     std::shared_ptr<snn::RResNet<96,256,20>> recurrent1;
 
@@ -114,7 +117,7 @@ class KapiBaraMind : public rclcpp::Node
 
     std::vector<std::shared_ptr<KapiBara_SubLayer>> layers;
 
-    snn::SIMDVectorLite<680> inputs;
+    snn::SIMDVectorLite<686> inputs;
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
 
@@ -130,11 +133,15 @@ class KapiBaraMind : public rclcpp::Node
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_publisher;
 
+    rclcpp::TimerBase::SharedPtr network_timer;
+
+    rclcpp::TimerBase::SharedPtr network_save_timer;
+
 
     void init_network()
     {
 
-        this->encoder = std::make_shared<snn::LayerKAC<680,96,20>>();
+        this->encoder = std::make_shared<snn::LayerKAC<686,96,20>>();
 
         this->recurrent1 = std::make_shared<snn::RResNet<96,256,20>>();
 
@@ -282,7 +289,7 @@ class KapiBaraMind : public rclcpp::Node
             return;
         }
 
-        auto iterator = points->data.begin()+8;
+        sensor_msgs::PointCloud2Iterator<float> iter_z(*points, "z");
 
         float num = 0.f;
 
@@ -293,14 +300,9 @@ class KapiBaraMind : public rclcpp::Node
         float min = 0;
         float max = 0;
 
-        while( iterator != points->data.end() )
+        while( iter_z != iter_z.end() )
         {
-            uint8_t* buffer = reinterpret_cast<uint8_t*>(&num);
-
-            buffer[0] = *iterator;
-            buffer[1] = *(iterator+1);
-            buffer[2] = *(iterator+2);
-            buffer[3] = *(iterator+3);
+            num = *iter_z;
 
             num = std::min(num,10.f);
             num = std::max(num,-10.f);
@@ -311,8 +313,7 @@ class KapiBaraMind : public rclcpp::Node
 
             max = max == 0 ? num : std::max(max,num);
 
-            iterator+=16;
-            iter++;
+            ++iter_z;
         }
 
         z_points = (z_points-min)/(max-min);
@@ -371,6 +372,11 @@ class KapiBaraMind : public rclcpp::Node
 
         this->layers[this->max_iter]->shuttle();
 
+    }
+
+    void network_callback()
+    {
+        RCLCPP_DEBUG(this->get_logger(),"Network fired!");
 
         const snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);
 
@@ -418,8 +424,18 @@ class KapiBaraMind : public rclcpp::Node
         twist.linear.x = linear_speed;
 
         this->twist_publisher->publish(twist);
+    }
 
+    void save_network_callback()
+    {
+        this->stop_motors();
 
+        int8_t ret = this->save_network();
+
+        if( ret != 0 )
+        {
+            RCLCPP_ERROR(this->get_logger(),"Got error id during network save: %i",(int32_t)ret);
+        }
     }
 
     public:
@@ -435,13 +451,13 @@ class KapiBaraMind : public rclcpp::Node
 
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
 
-        this->declare_parameter("max_linear_speed", 0.25f);
+        this->declare_parameter("max_linear_speed", 0.1f);
 
-        this->declare_parameter("max_angular_speed", 10.f);
+        this->declare_parameter("max_angular_speed", 2.f);
 
         this->max_iter = 0;
 
-        this->inputs = snn::SIMDVectorLite<680>(0);
+        this->inputs = snn::SIMDVectorLite<686>(0);
 
         this->init_network();
 
@@ -468,9 +484,25 @@ class KapiBaraMind : public rclcpp::Node
         // one publisher for ros2 control cmd
 
         this->twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("motors/cmd_vel_unstamped", 10);
+
+        this->network_timer = this->create_wall_timer(100ms, std::bind(&KapiBaraMind::network_callback, this));
+
+        // save each 10min
+        this->network_save_timer= this->create_wall_timer(60min, std::bind(&KapiBaraMind::save_network_callback, this));
     }
 
-    snn::SIMDVectorLite<64> fire_network(const snn::SIMDVectorLite<680>& input)
+    void stop_motors()
+    {
+        geometry_msgs::msg::Twist twist;
+
+        twist.angular.z = 0.f;
+
+        twist.linear.x = 0.f;
+
+        this->twist_publisher->publish(twist);
+    }
+
+    snn::SIMDVectorLite<64> fire_network(const snn::SIMDVectorLite<686>& input)
     {
 
         auto output = this->encoder->fire(input);
@@ -504,6 +536,13 @@ class KapiBaraMind : public rclcpp::Node
         return out;
     }
 
+    ~KapiBaraMind()
+    {
+        this->stop_motors();
+
+        this->save_network();
+    }
+
 };
 
 
@@ -515,8 +554,6 @@ int main(int argc,char** argv)
     auto node = std::make_shared<KapiBaraMind>();
 
     rclcpp::spin(node);
-
-    node->save_network();
 
     rclcpp::shutdown();
 

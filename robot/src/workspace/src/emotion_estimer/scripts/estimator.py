@@ -49,7 +49,7 @@ from emotion_estimer.face_data import FaceData,FaceObj
 
 from tiny_vectordb import VectorDatabase
 
-FACE_TOLERANCE = 0.875
+FACE_TOLERANCE = 0.9
 
 class EmotionEstimator(Node):
 
@@ -176,7 +176,7 @@ class EmotionEstimator(Node):
         self.jerk_fear = 0.0
         
         self.procratination_counter = 0
-        # self.procratination_timer = self.create_timer(1.0, self.procratination_timer_callback)
+        self.procratination_timer = self.create_timer(2.0, self.procratination_timer_callback)
         
         # parameter that describe fear distance threshold for laser sensor
         
@@ -251,6 +251,8 @@ class EmotionEstimator(Node):
         self.face_db_name:str = self.get_parameter('face_db').get_parameter_value().string_value+".db"
         
         self.face_score_name = self.face_db_name+"_scores.json"
+        
+        self.audio_output = 0
         
         
         self.face_database = VectorDatabase(self.face_db_name,[{
@@ -346,10 +348,10 @@ class EmotionEstimator(Node):
         # happiness
         # uncertainty
         # bordorm
-        emotions[0] = 0.0
-        emotions[1] = self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 0.5*self.pain_value
-        emotions[2] = self.good_sense + ( face_score > 0 )*0.5
-        emotions[3] = self.jerk_fear*0.25 + self.found_wall*0.75 + self.uncertain_sense*0.5
+        emotions[0] = (self.audio_output == 4)*0.1
+        emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 0.5*self.pain_value
+        emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
+        emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.75 + self.uncertain_sense*0.5
         emotions[4] = np.floor(self.procratination_counter/5.0)
         
         self.pain_value = self.pain_value / 1.25
@@ -749,6 +751,8 @@ class EmotionEstimator(Node):
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         
         self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
+        
+        self.audio_output = output
         
     def save_faces(self):
         
