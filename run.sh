@@ -11,7 +11,7 @@ docker compose -f compose.yml up --remove-orphans
 elif [ "$arg" = "compile" ]; then
 
 # docker compose -f build_compose.yml up
-docker compose -f compose.yml run robot /app/cmd/build_packages.sh
+docker compose -f compose.yml run robot /app/cmd/build_packages.sh gazebo_ros2_control
 
 elif [ "$arg" = "purge" ]; then
 
