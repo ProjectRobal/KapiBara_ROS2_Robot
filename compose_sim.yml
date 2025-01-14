@@ -11,6 +11,7 @@ services:
     build:
       dockerfile: ./Dockerfile.sim
       context: ./robot
+    stop_signal: SIGINT
     runtime: nvidia
     env_file:
       - ./robot/env/sim

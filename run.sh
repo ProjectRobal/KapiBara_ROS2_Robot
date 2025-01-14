@@ -8,6 +8,10 @@ if [ "$arg" = "start" ]; then
 
 docker compose -f compose.yml up --remove-orphans
 
+elif [ "$arg" = "stop" ]; then
+
+docker compose -f compose_sim.yml stop -t 3600
+
 elif [ "$arg" = "compile" ]; then
 
 # docker compose -f build_compose.yml up
@@ -64,6 +68,7 @@ docker compose -f compose.yml exec robot /app/cmd/run_cmd.sh ros2 topic pub --on
 else
 
 echo "start - start a container"
+echo "stop - stop a container"
 echo "compile - build all packages"
 echo "purge - remove containers"
 echo "rebuild - build image without caches"

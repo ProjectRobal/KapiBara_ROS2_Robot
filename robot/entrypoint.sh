@@ -18,4 +18,4 @@ cd /app/src
 
 # find /app/src/workspace/src -name "dependencies.txt" -exec pip3 install -r {} \;
 
-ros2 launch ./launch/launch.py
+exec ros2 launch ./launch/launch.py

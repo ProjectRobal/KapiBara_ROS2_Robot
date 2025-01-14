@@ -1,6 +1,6 @@
 FROM althack/ros2:humble-cuda-gazebo
 
-SHELL ["/bin/bash", "-c"]
+# SHELL ["/bin/bash", "-c"]
 
 
 ENV DEBIAN_FRONTEND noninteractive

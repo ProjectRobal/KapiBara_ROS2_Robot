@@ -13,6 +13,7 @@ services:
     build:
       dockerfile: ./Dockerfile
       context: ./robot
+    stop_signal: SIGINT
     env_file:
       - ./robot/env/env
     environment:

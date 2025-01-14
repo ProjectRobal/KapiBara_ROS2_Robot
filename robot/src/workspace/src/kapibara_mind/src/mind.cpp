@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <algorithm>
+#include <csignal> 
 
 
 #include <rclcpp/rclcpp.hpp>
@@ -442,6 +443,8 @@ class KapiBaraMind : public rclcpp::Node
 
     int8_t save_network()
     {
+        RCLCPP_INFO(this->get_logger(),"Saving network weights!");
+
         return this->arbiter.save(this->checkpoint_filename());
     }
 
@@ -544,7 +547,6 @@ class KapiBaraMind : public rclcpp::Node
     }
 
 };
-
 
 
 int main(int argc,char** argv)

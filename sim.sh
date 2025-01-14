@@ -17,6 +17,10 @@ if [ "$arg" = "start" ]; then
 
 docker compose -f compose_sim.yml up --remove-orphans
 
+elif [ "$arg" = "stop" ]; then
+
+docker compose -f compose_sim.yml stop -t 3600
+
 elif [ "$arg" = "compile" ]; then
 
 docker compose -f compose_sim.yml run gazebo /app/cmd/build_packages.sh camera_ros
@@ -72,6 +76,7 @@ docker compose -f compose_sim.yml exec gazebo /app/cmd/run_cmd.sh ros2 topic pub
 else
 
 echo "start - start a container"
+echo "stop - stop a container"
 echo "compile - build all packages"
 echo "purge - remove containers"
 echo "rebuild - build image without caches"

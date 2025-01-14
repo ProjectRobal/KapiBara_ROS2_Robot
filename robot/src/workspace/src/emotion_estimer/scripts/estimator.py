@@ -22,6 +22,8 @@ from rcl_interfaces.msg import ParameterDescriptor
 
 from kapibara_interfaces.msg import FaceEmbed
 
+import signal
+
 import os
 import json
 
@@ -267,6 +269,9 @@ class EmotionEstimator(Node):
         self.skip_frames_counter = 0
         
     def commit_faces(self):
+        
+        self.get_logger().info("Saving faces data!")
+        
         self.face_database.commit()
         self.faces_score.commit()
         
@@ -758,7 +763,10 @@ class EmotionEstimator(Node):
         
         self.get_logger().info("Saving faces embeddings!")
         
-        self.face_database.commit()        
+        self.face_database.commit()      
+        
+    def on_shutdown(self,sig, frame):
+        self.commit_faces()
 
 
 
@@ -766,14 +774,11 @@ def main(args=None):
     rclpy.init(args=args)
 
     emotion_estimator = EmotionEstimator()
+    
+    signal.signal(signal.SIGINT,emotion_estimator.on_shutdown)
 
     rclpy.spin(emotion_estimator)
-
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-    emotion_estimator.save_faces()
-    emotion_estimator.destroy_node()
+    
     rclpy.shutdown()
 
 
