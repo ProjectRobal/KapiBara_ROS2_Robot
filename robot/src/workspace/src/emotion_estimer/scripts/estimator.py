@@ -49,6 +49,8 @@ from emotion_estimer.face_data import FaceData,FaceObj
 
 from tiny_vectordb import VectorDatabase
 
+FACE_TOLERANCE = 0.875
+
 class EmotionEstimator(Node):
 
     def __init__(self):
@@ -321,7 +323,7 @@ class EmotionEstimator(Node):
             if len(search_ids) != 0:
                 ids = self.search_ids_to_num(search_ids[0])
                         
-                if len(search_scores)>0 and search_scores[0] >= 0.875:
+                if len(search_scores)>0 and search_scores[0] >= FACE_TOLERANCE:
                     
                     face_obj:FaceObj = self.faces_score.get_face(ids)
                     
@@ -334,7 +336,7 @@ class EmotionEstimator(Node):
                         self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
                 
             for ids,score in zip(search_ids,search_scores):
-                if score >= 0.875:
+                if score >= FACE_TOLERANCE:
                     _ids = self.search_ids_to_num(ids)
                     
                     self.faces_score.update_face_time(_ids)
@@ -622,7 +624,7 @@ class EmotionEstimator(Node):
                 if len(self.faces)>0:
                     search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
                     
-                    if len(search_scores)>0 and search_scores[0] >= 0.875:
+                    if len(search_scores)>0 and search_scores[0] >= FACE_TOLERANCE:
                         
                         ids = self.search_ids_to_num(search_ids[0])
                         # set emotion to a face                        
