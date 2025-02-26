@@ -4,3 +4,6 @@
 [submodule "robot/src/workspace/src/camera_ros"]
 	path = robot/src/workspace/src/camera_ros
 	url = git@github.com:christianrauch/camera_ros.git
+[submodule "robot/src/workspace/src/KapiBaraROSPackage"]
+	path = robot/src/workspace/src/KapiBaraROSPackage
+	url = git@github.com:ProjectRobal/KapiBaraROSPackage.git
