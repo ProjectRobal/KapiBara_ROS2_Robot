@@ -2,7 +2,6 @@ tensorflow-model-optimization
 opencv-python
 tflite
 tensorflow
-keras
 numpy
 tiny_vectordb==0.1.11
 platformdirs

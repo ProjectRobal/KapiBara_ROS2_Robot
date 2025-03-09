@@ -6,7 +6,7 @@ arg=$1
 
 if [ "$arg" = "start" ]; then
 
-docker compose -f compose.yml up --remove-orphans
+docker compose -f compose.yml up
 
 elif [ "$arg" = "stop" ]; then
 

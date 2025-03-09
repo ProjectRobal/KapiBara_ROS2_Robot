@@ -403,12 +403,12 @@ class KapiBaraMind : public rclcpp::Node
 
         const double max_angular_speed = this->get_parameter("max_angular_speed").as_double();
 
-        if(abs(x)<=1)
+        if(abs(x)<=2)
         {
             x = 0;
         }
 
-        if(abs(y)<=1)
+        if(abs(y)<=2)
         {
             y = 0;
         }
@@ -422,7 +422,7 @@ class KapiBaraMind : public rclcpp::Node
 
         twist.angular.z = angular_speed;
 
-        twist.linear.x = linear_speed;
+        twist.linear.x = -linear_speed;
 
         this->twist_publisher->publish(twist);
     }
