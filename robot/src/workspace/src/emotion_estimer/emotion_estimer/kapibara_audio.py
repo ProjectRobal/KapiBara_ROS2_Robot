@@ -3,7 +3,7 @@ import tensorflow as tf
 
 import platform
 
-from tensorflow_model_optimization.python.core.keras.compat import keras
+# from tensorflow_model_optimization.python.core.keras.compat import keras
 
 # import keras
 
@@ -35,20 +35,20 @@ class KapibaraAudio:
     def __init__(self,path:str|None=None,tflite:bool=False):
         self.model=None
         if path is not None:
-            if not tflite:
-                self.model=tf.keras.models.load_model(path)
-            else:
+            # if not tflite:
+            #     self.model=tf.keras.models.load_model(path)
+            # else:
                 
-                delegates=[]
-                
-                if path.find("_edgetpu")>0:
-                    delegates=[load_delegate(EDGETPU_SHARED_LIB)]
-                
-                self.model = Interpreter( model_path=path,
-                                         experimental_delegates=delegates)
-                self.model.allocate_tensors()
-                self.input_details = self.model.get_input_details()
-                self.output_details = self.model.get_output_details()
+            delegates=[]
+            
+            if path.find("_edgetpu")>0:
+                delegates=[load_delegate(EDGETPU_SHARED_LIB)]
+            
+            self.model = Interpreter( model_path=path,
+                                        experimental_delegates=delegates)
+            self.model.allocate_tensors()
+            self.input_details = self.model.get_input_details()
+            self.output_details = self.model.get_output_details()
             
         self.tflite = tflite
 
@@ -82,131 +82,131 @@ class KapibaraAudio:
 
 
 
-    '''path - a path to dataset'''
-    def train(self,path,batch_size=32,EPOCHS = 300,file="train.csv",valid="valid.csv",delimiter=";",save_path="./best_model.h5"):
+    # '''path - a path to dataset'''
+    # def train(self,path,batch_size=32,EPOCHS = 300,file="train.csv",valid="valid.csv",delimiter=";",save_path="./best_model.h5"):
         
-        files,labels = self.read_samples(path,file,delimiter)
+    #     files,labels = self.read_samples(path,file,delimiter)
 
-        spectrograms=[]
+    #     spectrograms=[]
         
 
-        for file in files:
-            audio=self.load_wav(path+"/wavs/"+file+".wav")
+    #     for file in files:
+    #         audio=self.load_wav(path+"/wavs/"+file+".wav")
 
-            spectrograms.append(self.gen_spectogram(audio))
+    #         spectrograms.append(self.gen_spectogram(audio))
 
-        print("Samples count: ",len(spectrograms))
+    #     print("Samples count: ",len(spectrograms))
 
-        dataset=tf.data.Dataset.from_tensor_slices((spectrograms,labels))
+    #     dataset=tf.data.Dataset.from_tensor_slices((spectrograms,labels))
 
-        train_ds=dataset
+    #     train_ds=dataset
 
-        train_ds=train_ds.batch(batch_size)
+    #     train_ds=train_ds.batch(batch_size)
 
-        train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE)
+    #     train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE)
 
-        #validation dataset
+    #     #validation dataset
 
-        files,labels = self.read_samples(path,valid,delimiter)
+    #     files,labels = self.read_samples(path,valid,delimiter)
 
-        spectrograms.clear()
+    #     spectrograms.clear()
 
-        for file in files:
-            audio=self.load_wav(path+"/wavs/"+file+".wav")
+    #     for file in files:
+    #         audio=self.load_wav(path+"/wavs/"+file+".wav")
 
-            spectrograms.append(self.gen_spectogram(audio))
+    #         spectrograms.append(self.gen_spectogram(audio))
 
-        valid_ds=tf.data.Dataset.from_tensor_slices((spectrograms,labels))
+    #     valid_ds=tf.data.Dataset.from_tensor_slices((spectrograms,labels))
 
-        valid_ds=valid_ds.batch(batch_size)
+    #     valid_ds=valid_ds.batch(batch_size)
 
-        valid_ds=valid_ds.cache().prefetch(tf.data.AUTOTUNE)
+    #     valid_ds=valid_ds.cache().prefetch(tf.data.AUTOTUNE)
 
-        for spectrogram, _ in dataset.take(1):
-            input_shape = spectrogram.shape
+    #     for spectrogram, _ in dataset.take(1):
+    #         input_shape = spectrogram.shape
 
-        #a root 
-        # a input of a size 64 x 64
+    #     #a root 
+    #     # a input of a size 64 x 64
         
-        model = keras.Sequential()
-        model.add(keras.Input(shape=input_shape))
+    #     model = keras.Sequential()
+    #     model.add(keras.Input(shape=input_shape))
 
-        # Instantiate the `tf.keras.layers.Normalization` layer.
-        # norm_layer = keras.layers.Normalization()
-        # Fit the state of the layer to the spectrograms
-        # with `Normalization.adapt`.
-        # norm_layer.adapt(data=dataset.map(map_func=lambda spec, label: spec))
+    #     # Instantiate the `tf.keras.layers.Normalization` layer.
+    #     # norm_layer = keras.layers.Normalization()
+    #     # Fit the state of the layer to the spectrograms
+    #     # with `Normalization.adapt`.
+    #     # norm_layer.adapt(data=dataset.map(map_func=lambda spec, label: spec))
         
-        # norm_layer(input_layer)
+    #     # norm_layer(input_layer)
         
-        # model.add(norm_layer)
+    #     # model.add(norm_layer)
 
-        model.add(keras.layers.Conv2D(8, 3, activation='relu'))
+    #     model.add(keras.layers.Conv2D(8, 3, activation='relu'))
 
-        # conv2=layers.Conv2D(16, 3, activation='relu')(conv1)
+    #     # conv2=layers.Conv2D(16, 3, activation='relu')(conv1)
 
-        model.add(keras.layers.Flatten())
+    #     model.add(keras.layers.Flatten())
 
-        #output layers
+    #     #output layers
 
-        model.add(keras.layers.Dense(16, activation='relu'))
+    #     model.add(keras.layers.Dense(16, activation='relu'))
         
-        model.add(keras.layers.Dense(24, activation='relu'))
+    #     model.add(keras.layers.Dense(24, activation='relu'))
         
-        model.add(keras.layers.Dense(24, activation='relu'))
+    #     model.add(keras.layers.Dense(24, activation='relu'))
                 
-        model.add(keras.layers.Dense(24, activation='relu'))
+    #     model.add(keras.layers.Dense(24, activation='relu'))
 
-        model.add(keras.layers.Dense(OUTPUTS,activation='softmax'))
+    #     model.add(keras.layers.Dense(OUTPUTS,activation='softmax'))
 
 
-        # model=models.Model(inputs=input_layer,outputs=neutral_output)
+    #     # model=models.Model(inputs=input_layer,outputs=neutral_output)
         
-        quantize_model = tfmot.quantization.keras.quantize_model
+    #     quantize_model = tfmot.quantization.keras.quantize_model
         
-        # q_aware stands for for quantization aware
-        q_aware_model = quantize_model(model)
+    #     # q_aware stands for for quantization aware
+    #     q_aware_model = quantize_model(model)
 
-        q_aware_model.summary()
+    #     q_aware_model.summary()
 
-        q_aware_model.compile(
-            optimizer=keras.optimizers.Adam(),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            metrics=['accuracy']
-        )
+    #     q_aware_model.compile(
+    #         optimizer=keras.optimizers.Adam(),
+    #         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    #         metrics=['accuracy']
+    #     )
 
         
-        history = q_aware_model.fit(
-            train_ds,
-            validation_data=valid_ds,
-            epochs=EPOCHS
-            )
+    #     history = q_aware_model.fit(
+    #         train_ds,
+    #         validation_data=valid_ds,
+    #         epochs=EPOCHS
+    #         )
         
-        q_aware_model.save(save_path)
+    #     q_aware_model.save(save_path)
         
-        def representative_dataset_gen():
-            for data in valid_ds:
-                # data = tf.cast(data[0], dtype=tf.int8)
-                yield [data[0]]
+    #     def representative_dataset_gen():
+    #         for data in valid_ds:
+    #             # data = tf.cast(data[0], dtype=tf.int8)
+    #             yield [data[0]]
                 
-        # model.load_weights("best_model.h5")
+    #     # model.load_weights("best_model.h5")
         
-        converter = tf.lite.TFLiteConverter.from_keras_model(q_aware_model)
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-        converter.representative_dataset = representative_dataset_gen
-        converter.inference_input_type = tf.float32
-        converter.inference_output_type = tf.float32
+    #     converter = tf.lite.TFLiteConverter.from_keras_model(q_aware_model)
+    #     converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    #     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    #     converter.representative_dataset = representative_dataset_gen
+    #     converter.inference_input_type = tf.float32
+    #     converter.inference_output_type = tf.float32
 
-        quantized_tflite_model = converter.convert()
+    #     quantized_tflite_model = converter.convert()
         
-        # quantized_tflite_model.save()        
+    #     # quantized_tflite_model.save()        
         
-        with open('model.tflite',"wb") as file:
-            file.write(quantized_tflite_model)
+    #     with open('model.tflite',"wb") as file:
+    #         file.write(quantized_tflite_model)
             
 
-        return history
+    #     return history
 
 
     '''generate spectogram'''

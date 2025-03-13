@@ -601,7 +601,7 @@ class EmotionEstimator(Node):
             
             score = 0
             
-            if delta > 250:
+            if delta > 325:
                 self.pain_value = 1.0
                 self.last_delta = 300
                 self._thrust = 10
@@ -609,7 +609,7 @@ class EmotionEstimator(Node):
                 
                 score = -10
                 
-            elif delta > 150:
+            elif delta > 175:
                 self.good_sense = 1.0
                 self.last_delta = 150
                 self._thrust = 10

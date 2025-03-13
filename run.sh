@@ -8,6 +8,15 @@ if [ "$arg" = "start" ]; then
 
 docker compose -f compose.yml up
 
+elif [ "$arg" = "start_bg" ]; then
+
+docker compose -f compose.yml up -d
+
+elif [ "$arg" = "clean" ]; then
+
+rm -R robot/src/workspace/build
+rm -R robot/src/workspace/install
+
 elif [ "$arg" = "stop" ]; then
 
 docker compose -f compose_sim.yml stop -t 3600

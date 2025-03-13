@@ -403,15 +403,17 @@ class KapiBaraMind : public rclcpp::Node
 
         const double max_angular_speed = this->get_parameter("max_angular_speed").as_double();
 
-        if(abs(x)<=2)
+        if(abs(x)<=3)
         {
             x = 0;
         }
 
-        if(abs(y)<=2)
+        if(abs(y)<=3)
         {
             y = 0;
         }
+
+        
 
         double linear_speed = (static_cast<double>(y)/8.f)*max_linear_speed;
 

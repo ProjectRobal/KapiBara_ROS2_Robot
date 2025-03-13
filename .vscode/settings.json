@@ -87,5 +87,18 @@
         "locale": "cpp",
         "__locale": "cpp"
     },
-    "cmake.sourceDirectory": "/home/projectrobal/Kapibara/ROS/Robot/camera_ros"
+    "cmake.sourceDirectory": "/home/projectrobal/Kapibara/ROS/Robot/camera_ros",
+    "python.languageServer": "Pylance",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingModuleSource": "none"
+    },
+    "python.terminal.activateEnvironment": false,
+    "micropico.openOnStart": true,
+    "python.analysis.typeshedPaths": [
+        "~/.micropico-stubs/included"
+    ],
+    "python.analysis.extraPaths": [
+        "~/.micropico-stubs/included"
+    ]
 }
