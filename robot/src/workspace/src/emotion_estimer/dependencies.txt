@@ -3,5 +3,7 @@ opencv-python
 tflite
 tensorflow
 numpy
+keras
+tf_keras
 tiny_vectordb==0.1.11
 platformdirs
