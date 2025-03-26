@@ -601,21 +601,33 @@ class EmotionEstimator(Node):
             
             score = 0
             
-            if delta > 325:
-                self.pain_value = 1.0
-                self.last_delta = 300
-                self._thrust = 10
-                self.get_logger().info('Pain occured: {}'.format(delta))
+            d_delta = delta - self.last_delta
+            
+            # self.get_logger().info("Current delta: {}".format(delta))
+            
+            
+            # if abs(d_delta) > 50 and abs(d_delta) < 100:
+            #     self.good_sense = 1.0
+            #     self.get_logger().info('Pat occured: {}'.format(d_delta))
+            #     score = 10
+            
+            
+            self.last_delta = delta
+            # if delta > 325:
+            #     self.pain_value = 1.0
+            #     self.last_delta = 300
+            #     self._thrust = 10
+            #     self.get_logger().info('Pain occured: {}'.format(delta))
                 
-                score = -10
+            #     score = -10
                 
-            elif delta > 175:
-                self.good_sense = 1.0
-                self.last_delta = 150
-                self._thrust = 10
-                self.get_logger().info('Pat occured: {}'.format(delta))
+            # elif delta > 175:
+            #     self.good_sense = 1.0
+            #     self.last_delta = 150
+            #     self._thrust = 10
+            #     self.get_logger().info('Pat occured: {}'.format(delta))
                 
-                score = 10
+            #     score = 10
                 
             
             if score !=0 and len(self.current_embeddings)>0:
@@ -701,6 +713,52 @@ class EmotionEstimator(Node):
         accel=imu.linear_acceleration
         
         accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 1.0)
+        
+        if accel_value > 0.25:
+            self.get_logger().info("Pain occured!")
+            
+            self.pain_value = 1.0
+            
+            score = -10.0
+            
+            if len(self.current_embeddings)>0:
+                # check if spotted face are present in database:
+                    
+                # sort by distances from robot                
+                self.current_embeddings = sorted(self.current_embeddings,key=lambda x: x[1],reverse=True)
+                
+                nearest_face = self.current_embeddings[0]
+                
+                faces_in_database:int = len(self.faces)
+                
+                if len(self.faces)>0:
+                    search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
+                    
+                    if len(search_scores)>0 and search_scores[0] >= FACE_TOLERANCE:
+                        
+                        ids = self.search_ids_to_num(search_ids[0])
+                        # set emotion to a face                        
+                        self.faces_score.update_face(ids,score)
+                        
+                        self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
+                        return
+                    
+                
+                ids = "ids"+str(faces_in_database+1)
+                # remove the oledest face when we got more than 500 elements in database
+                if len(self.faces)>500:
+                    oldest_face:FaceObj = self.faces_score.get_oldest_entry()
+                    
+                    if oldest_face is not None:
+                        ids = oldest_face.id
+                        self.get_logger().info("Face with "+ids+" has been overwritten!")
+                        
+                        self.faces_score.update_face(ids,score)
+                        return
+                
+                self.faces.setBlock([ids],[nearest_face[0]])                
+                self.faces_score.add_face(faces_in_database+1,score)
+                self.get_logger().info("Face with "+ids+" has been added!")
         
         self.thrust = abs(accel_value-self.last_accel)
         
