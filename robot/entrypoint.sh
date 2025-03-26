@@ -18,4 +18,6 @@ cd /app/src
 
 # find /app/src/workspace/src -name "dependencies.txt" -exec pip3 install -r {} \;
 
+# xargs apt -y install < /app/dep/packages.txt
+
 exec ros2 launch ./launch/launch.py

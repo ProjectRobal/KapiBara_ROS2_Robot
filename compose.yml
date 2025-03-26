@@ -2,6 +2,15 @@ version: '3.9'
 
 
 services:
+  mqtt:
+    container_name: mqtt_broker
+    image: emqx/nanomq:0.23
+
+    ports:
+      - 1883:1883
+      - 8083:8083
+      - 8883:8883
+
   robot:
     container_name: kapibara_robot2
     network_mode: host
@@ -32,22 +41,6 @@ services:
       # - ./addons:/addons
       # - /dev/shm:/dev/shm
       # - /tmp/.X11-unix:/tmp/.X11-unix:rw
-
-    # devices:
-    #   - /dev/snd:/dev/snd
-    #   - /dev/gpiomem0
-    #   - /dev/gpiomem1
-    #   - /dev/video0
-    #   - /dev/media0
-    #   - /dev/media1
-    #   - /dev/media2
-    #   - /dev/media3
-    #   - /dev/media4
-    #   - /dev/video1
-    #   - /dev/v4l
-    #   - /dev/v4l-subdev0
-    #   - /dev/v4l-subdev1
-    #   - /dev/v4l-subdev2
 
     group_add:
       - video

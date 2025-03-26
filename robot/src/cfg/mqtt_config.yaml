@@ -1,0 +1,20 @@
+mqtt_client:
+  ros__parameters:
+    broker:
+      host: 0.0.0.0
+      port: 1883
+    bridge:
+      ros2mqtt:
+        ros_topics: 
+          - /KapiBara/emotions
+        /KapiBara/emotions:
+          mqtt_topic: /emotions_state
+          # primitive: true
+          json: true
+      mqtt2ros:
+        mqtt_topics: 
+          - /emotions_state
+        /emotions_state:
+          ros_topic: /KapiBara/emotions
+          # primitive: true
+          json: true

@@ -596,10 +596,10 @@ class EmotionEstimator(Node):
             
             score = 0
                         
-            self.get_logger().info("Current delta: {}".format(delta))
+            # self.get_logger().info("Current delta: {}".format(delta))
             
             
-            if abs(delta) > 65 and abs(delta) < 200:
+            if abs(delta) > 100 and abs(delta) < 200:
                 self.good_sense = 10.0
                 self.get_logger().info('Pat occured: {}'.format(delta))
                 score = 10
