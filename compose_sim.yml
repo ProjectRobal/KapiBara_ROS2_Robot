@@ -16,7 +16,7 @@ services:
     env_file:
       - ./robot/env/sim
     environment:
-      - ROS_DOMAIN_ID = 0
+      - ROS_DOMAIN_ID=0
     volumes:
       - ./robot/entrypoint_sim.sh:/entrypoint_sim.sh:rwx
       - ./robot/commands/:/app/cmd
