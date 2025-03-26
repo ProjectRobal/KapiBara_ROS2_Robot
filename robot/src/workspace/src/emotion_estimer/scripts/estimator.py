@@ -348,6 +348,10 @@ class EmotionEstimator(Node):
                     
                     self.faces_score.update_face_time(_ids)
                     
+                    
+        if self.pain_value > 0.5:
+            self.good_sense = 0.0
+                    
         # anger
         # fear
         # happiness
@@ -590,44 +594,15 @@ class EmotionEstimator(Node):
             
             self.get_logger().debug('Sense: F: {} P: {} T: {}\n'.format(val,delta,self._thrust))
             
-            # if self._last_sense > 219.0:
-            #     self.good_sense = 1.0
-            
-            if self._thrust > 0:
-                self._thrust -= 1
-                if self.last_delta == 150:
-                    self.good_sense = 100
-                return
-            
             score = 0
-            
-            d_delta = delta - self.last_delta
-            
-            # self.get_logger().info("Current delta: {}".format(delta))
+                        
+            self.get_logger().info("Current delta: {}".format(delta))
             
             
-            # if abs(d_delta) > 50 and abs(d_delta) < 100:
-            #     self.good_sense = 1.0
-            #     self.get_logger().info('Pat occured: {}'.format(d_delta))
-            #     score = 10
-            
-            
-            self.last_delta = delta
-            # if delta > 325:
-            #     self.pain_value = 1.0
-            #     self.last_delta = 300
-            #     self._thrust = 10
-            #     self.get_logger().info('Pain occured: {}'.format(delta))
-                
-            #     score = -10
-                
-            # elif delta > 175:
-            #     self.good_sense = 1.0
-            #     self.last_delta = 150
-            #     self._thrust = 10
-            #     self.get_logger().info('Pat occured: {}'.format(delta))
-                
-            #     score = 10
+            if abs(delta) > 65 and abs(delta) < 200:
+                self.good_sense = 10.0
+                self.get_logger().info('Pat occured: {}'.format(delta))
+                score = 10
                 
             
             if score !=0 and len(self.current_embeddings)>0:
