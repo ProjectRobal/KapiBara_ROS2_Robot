@@ -12,6 +12,15 @@ find_package(nlohmann_json REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(kapibara_interfaces REQUIRED)
 
+find_library(PahoMqttC_LIBRARY libpaho-mqtt3as.so.1 REQUIRED)
+find_library(PahoMqttCpp_LIBRARY libpaho-mqttpp3.so.1 REQUIRED)
+
+if(nlohmann_json_FOUND)
+  include_directories(${nlohmann_json_INCLUDE_DIRS})
+else()
+  message(STATUS "nlohmann_json NOT Found !")
+endif(nlohmann_json_FOUND)
+
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -26,8 +35,15 @@ file(GLOB all_SRCS
         "src/*.c"
         )
 
+    
 add_executable(mqtt_bridge ${all_SRCS})
-ament_target_dependencies(mqtt_bridge rclcpp kapibara_interfaces nlohmann_json::nlohmann_json PahoMqttCpp::paho-mqttpp3)
+
+target_link_libraries(mqtt_bridge
+  ${PahoMqttC_LIBRARY}
+  ${PahoMqttCpp_LIBRARY}
+)
+
+ament_target_dependencies(mqtt_bridge rclcpp kapibara_interfaces)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

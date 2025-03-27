@@ -85,7 +85,10 @@
         "__tree": "cpp",
         "set": "cpp",
         "locale": "cpp",
-        "__locale": "cpp"
+        "__locale": "cpp",
+        "future": "cpp",
+        "__mutex_base": "cpp",
+        "csignal": "cpp"
     },
     "cmake.sourceDirectory": "/home/projectrobal/Kapibara/ROS/Robot/camera_ros",
     "python.languageServer": "Pylance",

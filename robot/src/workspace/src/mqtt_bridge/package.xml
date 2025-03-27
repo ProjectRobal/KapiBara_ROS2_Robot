@@ -10,7 +10,10 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>nlohmann-json-dev</depend>
+  <depend>libpaho-mqttpp-dev</depend>
   <depend>libpaho-mqtt-dev</depend>
+  <depend>libpaho-mqttpp</depend>
+  <depend>libpaho-mqtt</depend>
   <depend>kapibara_interfaces</depend>
 
   <test_depend>ament_lint_auto</test_depend>

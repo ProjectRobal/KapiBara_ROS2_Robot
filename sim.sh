@@ -21,6 +21,11 @@ elif [ "$arg" = "stop" ]; then
 
 docker compose -f compose_sim.yml stop -t 3600
 
+elif [ "$arg" = "clean" ]; then
+
+rm -R robot/src/workspace/sim_build
+rm -R robot/src/workspace/sim_install
+
 elif [ "$arg" = "compile" ]; then
 
 docker compose -f compose_sim.yml run gazebo /app/cmd/build_packages.sh camera_ros
