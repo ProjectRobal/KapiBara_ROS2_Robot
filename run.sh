@@ -8,6 +8,10 @@ if [ "$arg" = "start" ]; then
 
 docker compose -f compose.yml up
 
+elif [ "$arg" = "start_ros" ]; then
+
+docker compose -f compose_sim.yml exec -t gazebo /run.sh
+
 elif [ "$arg" = "start_bg" ]; then
 
 docker compose -f compose.yml up -d
@@ -23,8 +27,7 @@ docker compose -f compose_sim.yml stop -t 3600
 
 elif [ "$arg" = "compile" ]; then
 
-# docker compose -f build_compose.yml up
-docker compose -f compose.yml run robot /app/cmd/build_packages.sh gazebo_ros2_control
+docker compose -f compose.yml exec robot /app/cmd/build_packages.sh gazebo_ros2_control
 
 elif [ "$arg" = "purge" ]; then
 

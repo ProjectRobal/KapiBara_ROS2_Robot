@@ -2,22 +2,18 @@
 
 udevadm control --reload 
 
-source /opt/ros/humble/setup.bash
-source /app/src/workspace/install/setup.bash
+sudo apt-get update
 
+rosdep update
 
-cd /app/src
+pip3 install --upgrade pip 
 
-# sudo apt-get update
+rosdep install --from-paths /app/src/workspace/src --ignore-src  -r -y -q
 
-# rosdep update
+find /app/src/workspace/src -name "dependencies.txt" -exec pip3 install -r {} \;
 
-# pip3 install --upgrade pip 
+xargs apt -y install < /app/dep/packages.txt
 
-# rosdep install --from-paths /app/src/workspace/src --ignore-src  -r -y -q
+echo "Ready to go!!"
 
-# find /app/src/workspace/src -name "dependencies.txt" -exec pip3 install -r {} \;
-
-# xargs apt -y install < /app/dep/packages.txt
-
-exec ros2 launch ./launch/launch.py
+sleep infinity

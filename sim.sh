@@ -17,6 +17,10 @@ if [ "$arg" = "start" ]; then
 
 docker compose -f compose_sim.yml up --remove-orphans
 
+elif [ "$arg" = "start_ros" ]; then
+
+docker compose -f compose_sim.yml exec -t gazebo /run_sim.sh
+
 elif [ "$arg" = "stop" ]; then
 
 docker compose -f compose_sim.yml stop -t 3600
@@ -28,7 +32,7 @@ rm -R robot/src/workspace/sim_install
 
 elif [ "$arg" = "compile" ]; then
 
-docker compose -f compose_sim.yml run gazebo /app/cmd/build_packages.sh camera_ros
+docker compose -f compose_sim.yml exec gazebo /app/cmd/build_packages.sh camera_ros
 
 elif [ "$arg" = "purge" ]; then
 

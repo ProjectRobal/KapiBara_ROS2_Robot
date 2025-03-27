@@ -17,6 +17,7 @@ services:
     image: robot_ros
 
     privileged: true
+    tty: true
     # networks:
       # - internet
     build:
@@ -29,6 +30,7 @@ services:
       - ROS_DOMAIN_ID = 0
     volumes:
       - ./robot/entrypoint.sh:/entrypoint.sh:rwx
+      - ./robot/run.sh:/run.sh:rwx
       - ./robot/commands/:/app/cmd
       - ./robot/dependencies/:/app/dep
       - ./robot/src:/app/src:rw

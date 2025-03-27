@@ -11,13 +11,14 @@ services:
       - 1883:1883
       - 8083:8083
       - 8883:8883
-      
+
   gazebo:
     container_name: kapibara_robot_sim
     network_mode: host
     image: robot_gazebo_ros
 
     privileged: true
+    tty: true
     build:
       dockerfile: ./Dockerfile.sim
       context: ./robot
@@ -28,7 +29,8 @@ services:
     environment:
       - ROS_DOMAIN_ID=0
     volumes:
-      - ./robot/entrypoint_sim.sh:/entrypoint_sim.sh:rwx
+      - ./robot/entrypoint.sh:/entrypoint.sh:rwx
+      - ./robot/run_sim.sh:/run_sim.sh:rwx
       - ./robot/commands/:/app/cmd
       - ./robot/dependencies/:/app/dep
       - ./robot/src:/app/src:rw
