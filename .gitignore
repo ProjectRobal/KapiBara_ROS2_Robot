@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 
+.venv/
+
 robot/src/workspace/log/*
 robot/src/workspace/install/*
 robot/src/workspace/build/*

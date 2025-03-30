@@ -23,8 +23,14 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+execute_process(
+  COMMAND bash ./install.sh 
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  RESULT_VARIABLE variable_RESULT
+  OUTPUT_VARIABLE variable_OUTPUT
+  )
+
 install(PROGRAMS
-  scripts/run_pipeline.py
   scripts/run_pipeline.sh
   rhasspy3
   DESTINATION lib/${PROJECT_NAME}
