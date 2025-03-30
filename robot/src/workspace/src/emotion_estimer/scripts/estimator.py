@@ -22,6 +22,9 @@ from rcl_interfaces.msg import ParameterDescriptor
 
 from kapibara_interfaces.msg import FaceEmbed
 
+from kapibara_interfaces.srv import StopMind
+
+
 import signal
 
 import os
@@ -269,6 +272,51 @@ class EmotionEstimator(Node):
         self.skip_frames_counter = 0
         
         # KapiBara mind stop timer:
+        
+        self.start_again_mind = self.create_timer(15,self.start_again_mind_callback)
+        self.start_again_mind.cancel()
+        
+        self.stop_mind_srv = self.create_client(StopMind,'/KapiBara/stop_mind')
+        
+        while not self.stop_mind_srv.wait_for_service(timeout_sec=10.0):
+            self.get_logger().info('Stop Mind service not available, waiting again...')
+            
+        if not self.stop_mind_srv.service_is_ready():
+            raise Exception("Stop Mind service is not available!!!")
+    
+    
+    def stop_mind(self):
+        
+        self.get_logger().info('Stopping Mind ...')
+        
+        req = StopMind.Request()
+        
+        req.stop = False
+        
+        future = self.stop_mind_srv.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+        
+        self.start_again_mind.reset()
+        
+        self.get_logger().info('Mind stopped!')
+        
+        
+    
+    def start_again_mind_callback(self):
+        
+        self.get_logger().info('Starting Mind ...')
+        
+        req = StopMind.Request()
+        
+        req.stop = False
+        
+        future = self.stop_mind_srv.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+        
+        self.start_again_mind.cancel()
+        
+        self.get_logger().info('Mind started!')
+    
         
     def commit_faces(self):
         
@@ -605,6 +653,8 @@ class EmotionEstimator(Node):
                 self.good_sense = 10.0
                 self.get_logger().info('Pat occured: {}'.format(delta))
                 score = 10
+                
+                self.stop_mind()
                 
             
             if score !=0 and len(self.current_embeddings)>0:
