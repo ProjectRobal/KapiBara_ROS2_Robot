@@ -1,7 +1,7 @@
 #!/bin/bash
 
 source /opt/ros/humble/setup.bash
-source /app/src/workspace/sim_install/setup.bash
+source /app/src/workspace/install/setup.bash
 
 cd /app/src
 
