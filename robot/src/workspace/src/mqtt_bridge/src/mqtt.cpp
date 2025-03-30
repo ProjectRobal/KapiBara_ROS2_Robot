@@ -4,10 +4,19 @@
 
 #include <kapibara_interfaces/msg/emotions.hpp>
 
+#include <kapibara_interfaces/srv/stop_mind.hpp>
+
+
 #include <map>
 #include <functional>
 
 #include <nlohmann/json.hpp>
+
+#include <chrono>
+#include <cstdlib>
+#include <memory>
+
+using namespace std::chrono_literals;
 using json = nlohmann::json;
 
 class MQTTROSBridge : public rclcpp::Node,virtual mqtt::callback {
@@ -32,11 +41,21 @@ public:
         this->mqtt_client_ = new mqtt::async_client(broker,"0","./persit");
 
         this->mqtt_to_ros["/emotion_state"] = std::bind(&MQTTROSBridge::emotion_state_from_mqtt,this,std::placeholders::_1);
+        this->mqtt_to_ros["/stop"] = std::bind(&MQTTROSBridge::stop_mind_from_mqtt,this,std::placeholders::_1);
 
         // MQTT Setup
         this->mqtt_client_->set_callback(*this);
 
         RCLCPP_INFO(this->get_logger(), "Connecting to MQTT server at %s",broker.c_str());
+
+        this->stop_mind_client = this->create_client<kapibara_interfaces::srv::StopMind>("/KapiBara/stop_mind");
+
+        while (!this->stop_mind_client->wait_for_service(10s)) {
+            if (!rclcpp::ok()) {
+              throw std::runtime_error("Stop Mind service is not avaliable!");
+            }
+            RCLCPP_INFO(this->get_logger(), "Stop Mind service not available, waiting again...");
+          }
 
         // wait 1 minute for connection
         this->mqtt_client_->connect()->wait_for(60*1000);
@@ -55,6 +74,45 @@ public:
             throw std::runtime_error("Cannot connect to MQTT server!");
         }
 
+    }
+
+    void stop_mind_from_mqtt(const std::string& msg)
+    {
+        json emotions = json::parse(msg);
+
+        if( !emotions.contains("stop") || !emotions["stop"].is_boolean())
+        {
+            return;
+        }
+        RCLCPP_DEBUG(this->get_logger(), "Got stop mind request");
+
+        auto stop_mind_request = std::make_shared<kapibara_interfaces::srv::StopMind::Request>();
+
+        bool stop = emotions["stop"];
+
+        stop_mind_request->stop = stop;
+
+        auto result = this->stop_mind_client->async_send_request(stop_mind_request);
+
+        json response;
+
+        // Wait for the result.
+        if (rclcpp::spin_until_future_complete(this->shared_from_this(), result) ==
+            rclcpp::FutureReturnCode::SUCCESS)
+        {
+            response["ok"] = true;
+
+            RCLCPP_INFO(this->get_logger(), "Stop mind request sent successfully");
+        } else {
+
+            response["ok"] = false;
+
+            RCLCPP_ERROR(this->get_logger(), "Failed to call service Stop Mind");
+        }
+
+        const std::string data = response.dump();
+
+        this->mqtt_client_->publish(mqtt::make_message("/stop_mind_callback", data));
     }
 
     void emotion_state_from_mqtt(const std::string& msg)
@@ -110,7 +168,7 @@ public:
 
         const std::string data = emotion.dump();
 
-        mqtt_client_->publish(mqtt::make_message("/emotion_state_callback", data));
+        this->mqtt_client_->publish(mqtt::make_message("/emotion_state_callback", data));
     }
 
     ~MQTTROSBridge()
@@ -128,6 +186,8 @@ private:
     std::map<std::string,std::function<void(const std::string&)>> mqtt_to_ros;
     rclcpp::Publisher<kapibara_interfaces::msg::Emotions>::SharedPtr emotion_publisher;
     rclcpp::Subscription<kapibara_interfaces::msg::Emotions>::SharedPtr emotion_subscriber;
+
+    rclcpp::Client<kapibara_interfaces::srv::StopMind>::SharedPtr stop_mind_client;
 };
 
 int main(int argc, char *argv[]) {
