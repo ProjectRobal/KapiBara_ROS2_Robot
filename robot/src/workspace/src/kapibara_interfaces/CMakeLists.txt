@@ -29,6 +29,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/PID.msg"
   "msg/PiezoSense.msg"
   "srv/Emotions.srv"
+  "srv/StopMind.srv"
 )
 
 if(BUILD_TESTING)

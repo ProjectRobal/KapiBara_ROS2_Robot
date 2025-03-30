@@ -25,6 +25,10 @@
 #include <kapibara_interfaces/msg/face_embed.hpp>
 // emotions, network will be triggered by emotions message
 #include <kapibara_interfaces/msg/emotions.hpp>
+
+#include <kapibara_interfaces/srv/stop_mind.hpp>
+
+
 // encoders speed
 #include <nav_msgs/msg/odometry.hpp>
 // spectogram
@@ -132,11 +136,31 @@ class KapiBaraMind : public rclcpp::Node
 
     rclcpp::Subscription<kapibara_interfaces::msg::Emotions>::SharedPtr emotions_subscription;
 
+    rclcpp::Service<kapibara_interfaces::srv::StopMind>::SharedPtr stop_mind_service;
+
+
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_publisher;
 
     rclcpp::TimerBase::SharedPtr network_timer;
 
     rclcpp::TimerBase::SharedPtr network_save_timer;
+
+    void stop_mind_handle(const std::shared_ptr<kapibara_interfaces::srv::StopMind::Request> request,
+        std::shared_ptr<kapibara_interfaces::srv::StopMind::Response> response)
+    {
+        bool stop = request->stop;
+        RCLCPP_INFO(this->get_logger(),"Stop mind request: %s",stop?"true":"false");
+
+        if(stop)
+        {
+            this->stop_motors();
+            this->network_timer->cancel();
+        }
+        else
+        {
+            this->network_timer->reset();
+        }
+    }
 
 
     void init_network()
@@ -485,6 +509,9 @@ class KapiBaraMind : public rclcpp::Node
 
         this->emotions_subscription = this->create_subscription<kapibara_interfaces::msg::Emotions>(
       "emotions", 10, std::bind(&KapiBaraMind::emotions_callback, this, _1));
+
+        this->stop_mind_service = this->create_service<kapibara_interfaces::srv::StopMind>(
+      "stop_mind", std::bind(&KapiBaraMind::stop_mind_handle, this, std::placeholders::_1, std::placeholders::_2));
 
         // one publisher for ros2 control cmd
 

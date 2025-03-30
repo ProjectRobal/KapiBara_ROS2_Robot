@@ -268,6 +268,8 @@ class EmotionEstimator(Node):
         
         self.skip_frames_counter = 0
         
+        # KapiBara mind stop timer:
+        
     def commit_faces(self):
         
         self.get_logger().info("Saving faces data!")
