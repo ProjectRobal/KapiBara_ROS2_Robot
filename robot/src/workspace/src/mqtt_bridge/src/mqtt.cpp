@@ -6,6 +6,8 @@
 
 #include <kapibara_interfaces/srv/stop_mind.hpp>
 
+#include <kapibara_interfaces/msg/microphone.hpp>
+
 
 #include <map>
 #include <functional>
@@ -36,6 +38,9 @@ public:
         this->emotion_publisher = this->create_publisher<kapibara_interfaces::msg::Emotions>("emotions", 10);
         this->emotion_subscriber = this->create_subscription<kapibara_interfaces::msg::Emotions>("emotions", 10,
             std::bind(&MQTTROSBridge::emotion_callback, this, std::placeholders::_1));
+
+        this->microphone_subscriber = this->create_subscription<kapibara_interfaces::msg::Microphone>("microphone", 10,
+            std::bind(&MQTTROSBridge::microphone_callback, this, std::placeholders::_1));
 
 
         this->mqtt_client_ = new mqtt::async_client(broker,"0","./persit");
@@ -153,6 +158,49 @@ public:
 
     }
 
+    void microphone_callback(const kapibara_interfaces::msg::Microphone::SharedPtr msg)
+    {
+        RCLCPP_DEBUG(this->get_logger(), "Publishing microphone to MQTT");
+
+        auto& channel1 = msg->channel1;
+
+        auto& channel2 = msg->channel2;
+
+        uint32_t buffer_size = msg.buffer_size;
+
+        uint8_t* buffer = new uint8_t[buffer_size*sizeof(int32_t)];
+
+        for( uint32_t i = 0; i < buffer_size; i+= 2 )
+        {
+            uint32_t offset = i*sizeof(int32_t);
+
+            uint8_t* serialized = reinterpret_cast<uint8_t*>(&channel1[i/2]);
+
+            buffer[offset] = serialized[0];
+            buffer[offset+1] = serialized[1];
+            buffer[offset+2] = serialized[2];
+            buffer[offset+3] = serialized[3];
+
+        }
+
+        for( uint32_t i = 1; i < buffer_size; i+= 2 )
+        {
+            uint32_t offset = i*sizeof(int32_t);
+
+            uint8_t* serialized = reinterpret_cast<uint8_t*>(&channel2[i/2]);
+
+            buffer[offset] = serialized[0];
+            buffer[offset+1] = serialized[1];
+            buffer[offset+2] = serialized[2];
+            buffer[offset+3] = serialized[3];
+
+        }
+        
+        this->mqtt_client_->publish("/microphone",buffer,buffer_size*sizeof(int32_t));
+
+        delete [] buffer;
+    }
+
     // ROS to MQTT callback
     void emotion_callback(const kapibara_interfaces::msg::Emotions::SharedPtr msg) {
         RCLCPP_DEBUG(this->get_logger(), "Publishing emotion state to MQTT");
@@ -186,6 +234,9 @@ private:
     std::map<std::string,std::function<void(const std::string&)>> mqtt_to_ros;
     rclcpp::Publisher<kapibara_interfaces::msg::Emotions>::SharedPtr emotion_publisher;
     rclcpp::Subscription<kapibara_interfaces::msg::Emotions>::SharedPtr emotion_subscriber;
+
+    rclcpp::Subscription<kapibara_interfaces::msg::Microphone>::SharedPtr microphone_subscriber;
+
 
     rclcpp::Client<kapibara_interfaces::srv::StopMind>::SharedPtr stop_mind_client;
 };

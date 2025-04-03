@@ -8,4 +8,4 @@ cd -P "$install_path"/lib/voice_assistant/rhasspy3
 
 # script/run bin/mic_test_energy.py
 
-script/run bin/pipeline_run.py --debug
+# script/run bin/pipeline_run.py --debug
