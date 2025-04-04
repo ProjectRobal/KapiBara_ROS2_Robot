@@ -276,25 +276,25 @@ class EmotionEstimator(Node):
         self.start_again_mind = self.create_timer(15,self.start_again_mind_callback)
         self.start_again_mind.cancel()
         
-        self.stop_mind_srv = self.create_client(StopMind,'/KapiBara/stop_mind')
+        self.stop_mind_srv = self.create_client(StopMind,'stop_mind')
         
         timeout_counter = 0
         
         self._stop_mind_failed = False
         
-        while not self.stop_mind_srv.wait_for_service(timeout_sec=1.0):
+        while not self.stop_mind_srv.wait_for_service(timeout_sec=20.0):
             self.get_logger().info('Stop Mind service not available, waiting again...')
             
             timeout_counter += 1
-            if timeout_counter > 10:
+            if timeout_counter > 60:
                 self.get_logger().error('Stop Mind service not available, exiting...')
                 
                 self._stop_mind_failed = True
                 
                 break
             
-        # if not self.stop_mind_srv.service_is_ready():
-        #     raise Exception("Stop Mind service is not available!!!")
+        if not self.stop_mind_srv.service_is_ready():
+            self.get_logger().error("Stop Mind service is not available!!!")
     
     
     def stop_mind(self):
@@ -306,14 +306,14 @@ class EmotionEstimator(Node):
         
         req = StopMind.Request()
         
-        req.stop = False
+        req.stop = True
         
         future = self.stop_mind_srv.call_async(req)
-        rclpy.spin_until_future_complete(self, future)
-        
-        self.start_again_mind.reset()
+        # rclpy.spin_until_future_complete(self, future)
         
         self.get_logger().info('Mind stopped!')
+        
+        self.start_again_mind.reset()
         
         
     
@@ -329,7 +329,7 @@ class EmotionEstimator(Node):
         req.stop = False
         
         future = self.stop_mind_srv.call_async(req)
-        rclpy.spin_until_future_complete(self, future)
+        # rclpy.spin_until_future_complete(self, future)
         
         self.start_again_mind.cancel()
         
@@ -667,7 +667,7 @@ class EmotionEstimator(Node):
             # self.get_logger().info("Current delta: {}".format(delta))
             
             
-            if abs(delta) > 100 and abs(delta) < 200:
+            if abs(delta) > 120 and abs(delta) < 200:
                 self.good_sense = 10.0
                 self.get_logger().info('Pat occured: {}'.format(delta))
                 score = 10

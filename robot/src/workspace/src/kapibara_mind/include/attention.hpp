@@ -27,6 +27,22 @@ namespace snn
 
         public:
 
+        Attention()
+        {
+            for(size_t i=0;i<ActionCount;++i)
+            {
+                snn::SIMDVectorLite<InputSize> action;
+
+                this->last_actions.push_back(action);
+
+                snn::SIMDVectorLite<OutputSize> cache;
+
+                this->cached_attention.push_back(cache);
+
+                this->scores.push_back(0);
+            }
+        }
+
         snn::SIMDVectorLite<OutputSize> process(const snn::SIMDVectorLite<InputSize>& input)
         {   
             // push current input to buffer
@@ -85,20 +101,6 @@ namespace snn
         {
             conv.setup();
             attention.setup();
-
-
-            for(size_t i=0;i<ActionCount;++i)
-            {
-                snn::SIMDVectorLite<InputSize> action;
-
-                this->last_actions.push_back(action);
-
-                snn::SIMDVectorLite<OutputSize> cache;
-
-                this->cached_attention.push_back(cache);
-
-                this->scores.push_back(0);
-            }
 
         }
 

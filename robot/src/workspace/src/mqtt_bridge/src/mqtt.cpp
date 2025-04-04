@@ -26,17 +26,18 @@ public:
     MQTTROSBridge() : Node("mqtt_ros_bridge") {
         // Declare ROS 2 parameters
         this->declare_parameter("mqtt_broker", "tcp://0.0.0.0:1883");
-        this->declare_parameter("ros_topic", "ros_to_mqtt");
+        this->declare_parameter("stop_mind_enable", true);
+        
 
         // Get parameters
         std::string broker = this->get_parameter("mqtt_broker").as_string();
-        ros_topic_ = this->get_parameter("ros_topic").as_string();
+        bool stop_mind_enable = this->get_parameter("stop_mind_enable").as_bool();
 
         // ROS 2 Publisher & Subscriber
         // publisher_ = this->create_publisher<std_msgs::msg::String>(ros_topic_, 10);
 
-        this->emotion_publisher = this->create_publisher<kapibara_interfaces::msg::Emotions>("emotions", 10);
-        this->emotion_subscriber = this->create_subscription<kapibara_interfaces::msg::Emotions>("emotions", 10,
+        this->emotion_publisher = this->create_publisher<kapibara_interfaces::msg::Emotions>("/KapiBara/emotions", 10);
+        this->emotion_subscriber = this->create_subscription<kapibara_interfaces::msg::Emotions>("/KapiBara/emotions", 10,
             std::bind(&MQTTROSBridge::emotion_callback, this, std::placeholders::_1));
 
         this->microphone_subscriber = this->create_subscription<kapibara_interfaces::msg::Microphone>("microphone", 10,
@@ -46,21 +47,30 @@ public:
         this->mqtt_client_ = new mqtt::async_client(broker,"0","./persit");
 
         this->mqtt_to_ros["/emotion_state"] = std::bind(&MQTTROSBridge::emotion_state_from_mqtt,this,std::placeholders::_1);
-        this->mqtt_to_ros["/stop"] = std::bind(&MQTTROSBridge::stop_mind_from_mqtt,this,std::placeholders::_1);
+
+        if(stop_mind_enable)
+        {
+            this->mqtt_to_ros["/stop"] = std::bind(&MQTTROSBridge::stop_mind_from_mqtt,this,std::placeholders::_1);
+        }
 
         // MQTT Setup
         this->mqtt_client_->set_callback(*this);
 
         RCLCPP_INFO(this->get_logger(), "Connecting to MQTT server at %s",broker.c_str());
 
-        this->stop_mind_client = this->create_client<kapibara_interfaces::srv::StopMind>("/KapiBara/stop_mind");
+        if(stop_mind_enable)
+        {
 
-        while (!this->stop_mind_client->wait_for_service(10s)) {
-            if (!rclcpp::ok()) {
-              throw std::runtime_error("Stop Mind service is not avaliable!");
+            this->stop_mind_client = this->create_client<kapibara_interfaces::srv::StopMind>("/KapiBara/stop_mind");
+
+            while (!this->stop_mind_client->wait_for_service(20*60s)) {
+                if (!rclcpp::ok()) {
+                throw std::runtime_error("Stop Mind service is not avaliable!");
+                }
+                RCLCPP_INFO(this->get_logger(), "Stop Mind service not available, waiting again...");
             }
-            RCLCPP_INFO(this->get_logger(), "Stop Mind service not available, waiting again...");
-          }
+
+        }
 
         // wait 1 minute for connection
         this->mqtt_client_->connect()->wait_for(60*1000);
@@ -101,19 +111,21 @@ public:
 
         json response;
 
-        // Wait for the result.
-        if (rclcpp::spin_until_future_complete(this->shared_from_this(), result) ==
-            rclcpp::FutureReturnCode::SUCCESS)
-        {
-            response["ok"] = true;
+        // // Wait for the result.
+        // if (rclcpp::spin_until_future_complete(this->shared_from_this(), result) ==
+        //     rclcpp::FutureReturnCode::SUCCESS)
+        // {
+        //     response["ok"] = true;
 
-            RCLCPP_INFO(this->get_logger(), "Stop mind request sent successfully");
-        } else {
+        //     RCLCPP_INFO(this->get_logger(), "Stop mind request sent successfully");
+        // } else {
 
-            response["ok"] = false;
+        //     response["ok"] = false;
 
-            RCLCPP_ERROR(this->get_logger(), "Failed to call service Stop Mind");
-        }
+        //     RCLCPP_ERROR(this->get_logger(), "Failed to call service Stop Mind");
+        // }
+
+        response["ok"] = true;
 
         const std::string data = response.dump();
 
@@ -229,7 +241,6 @@ public:
 private:
     mqtt::async_client* mqtt_client_;
     std::string mqtt_topic_;
-    std::string ros_topic_;
 
     std::map<std::string,std::function<void(const std::string&)>> mqtt_to_ros;
     rclcpp::Publisher<kapibara_interfaces::msg::Emotions>::SharedPtr emotion_publisher;

@@ -166,6 +166,8 @@ class KapiBaraMind : public rclcpp::Node
         {
             this->network_timer->reset();
         }
+
+        response->ok = true;
     }
 
 
@@ -209,7 +211,7 @@ class KapiBaraMind : public rclcpp::Node
             }
             else
             {
-                RCLCPP_DEBUG(this->get_logger(),"Network has been saved!");
+                RCLCPP_INFO(this->get_logger(),"Network has been saved!");
             }
 
         }
@@ -514,6 +516,7 @@ class KapiBaraMind : public rclcpp::Node
 
         this->stop_mind_service = this->create_service<kapibara_interfaces::srv::StopMind>(
       "stop_mind", std::bind(&KapiBaraMind::stop_mind_handle, this, std::placeholders::_1, std::placeholders::_2));
+
 
         // one publisher for ros2 control cmd
 
