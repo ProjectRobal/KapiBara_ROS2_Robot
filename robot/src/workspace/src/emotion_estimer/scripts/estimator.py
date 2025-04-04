@@ -278,14 +278,29 @@ class EmotionEstimator(Node):
         
         self.stop_mind_srv = self.create_client(StopMind,'/KapiBara/stop_mind')
         
-        while not self.stop_mind_srv.wait_for_service(timeout_sec=10.0):
+        timeout_counter = 0
+        
+        self._stop_mind_failed = False
+        
+        while not self.stop_mind_srv.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Stop Mind service not available, waiting again...')
             
-        if not self.stop_mind_srv.service_is_ready():
-            raise Exception("Stop Mind service is not available!!!")
+            timeout_counter += 1
+            if timeout_counter > 10:
+                self.get_logger().error('Stop Mind service not available, exiting...')
+                
+                self._stop_mind_failed = True
+                
+                break
+            
+        # if not self.stop_mind_srv.service_is_ready():
+        #     raise Exception("Stop Mind service is not available!!!")
     
     
     def stop_mind(self):
+        
+        if self._stop_mind_failed:
+            return
         
         self.get_logger().info('Stopping Mind ...')
         
@@ -303,6 +318,9 @@ class EmotionEstimator(Node):
         
     
     def start_again_mind_callback(self):
+        
+        if self._stop_mind_failed:
+            return
         
         self.get_logger().info('Starting Mind ...')
         

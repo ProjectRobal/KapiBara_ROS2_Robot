@@ -10,7 +10,7 @@ docker compose -f compose.yml up
 
 elif [ "$arg" = "start_ros" ]; then
 
-docker compose -f compose_sim.yml exec -t gazebo /run.sh
+docker compose -f compose_sim.yml exec -t robot /run.sh
 
 elif [ "$arg" = "start_bg" ]; then
 

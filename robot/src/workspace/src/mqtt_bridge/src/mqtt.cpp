@@ -166,7 +166,7 @@ public:
 
         auto& channel2 = msg->channel2;
 
-        uint32_t buffer_size = msg.buffer_size;
+        uint32_t buffer_size = msg->buffor_size;
 
         uint8_t* buffer = new uint8_t[buffer_size*sizeof(int32_t)];
 
@@ -176,10 +176,10 @@ public:
 
             uint8_t* serialized = reinterpret_cast<uint8_t*>(&channel1[i/2]);
 
-            buffer[offset] = serialized[0];
-            buffer[offset+1] = serialized[1];
-            buffer[offset+2] = serialized[2];
-            buffer[offset+3] = serialized[3];
+            for( uint32_t j =0 ; j < sizeof(int32_t); j++)
+            {
+                buffer[offset+j] = serialized[j];
+            }
 
         }
 
@@ -189,10 +189,10 @@ public:
 
             uint8_t* serialized = reinterpret_cast<uint8_t*>(&channel2[i/2]);
 
-            buffer[offset] = serialized[0];
-            buffer[offset+1] = serialized[1];
-            buffer[offset+2] = serialized[2];
-            buffer[offset+3] = serialized[3];
+            for( uint32_t j =0 ; j < sizeof(int32_t); j++)
+            {
+                buffer[offset+j] = serialized[j];
+            }
 
         }
         
