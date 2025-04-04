@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <algorithm>
 #include <csignal> 
+#include <random>
+
 
 
 #include <rclcpp/rclcpp.hpp>
@@ -69,7 +71,7 @@
 
 #include "kapibara_sublayer.hpp"
 
-#include "RResNet.hpp"
+#include "attention.hpp"
 
 
 #include "block_kac.hpp"
@@ -105,22 +107,26 @@ using namespace std::chrono_literals;
 
 class KapiBaraMind : public rclcpp::Node
 {
+    std::random_device rd;
+    std::mt19937 gen; // Standard mersenne_twister_engine seeded with rd()
+    
 
     snn::Arbiter arbiter;
 
     size_t max_iter;
 
-    std::shared_ptr<snn::LayerKAC<686,96,20>> encoder;
+    std::shared_ptr<snn::Attention<686,256,64,20>> attention;
 
-    std::shared_ptr<snn::RResNet<96,256,20>> recurrent1;
+    std::shared_ptr<snn::LayerKAC<256,4096,20>> layer1;
 
-    std::shared_ptr<snn::LayerKAC<96,32,20,snn::ReLu>> layer1;
+    std::shared_ptr<snn::LayerKAC<4096,2048,20,snn::ReLu>> layer2;
 
-    std::shared_ptr<snn::RResNet<32,128,20>> recurrent2;
+    std::shared_ptr<snn::LayerKAC<2048,512,20,snn::ReLu>> layer3;
 
-    std::shared_ptr<snn::LayerKAC<32,MEMBERS_COUNT,20,snn::SoftMax>> decision;
+    std::shared_ptr<snn::LayerKAC<512,256,20,snn::ReLu>> layer4;
 
-    std::vector<std::shared_ptr<KapiBara_SubLayer>> layers;
+    std::shared_ptr<snn::LayerKAC<256,64,20>> layer5;
+
 
     snn::SIMDVectorLite<686> inputs;
 
@@ -165,38 +171,21 @@ class KapiBaraMind : public rclcpp::Node
 
     void init_network()
     {
+        this->attention = std::make_shared<>();
 
-        this->encoder = std::make_shared<snn::LayerKAC<686,96,20>>();
+        this->layer1 = std::make_shared<>();
+        this->layer2 = std::make_shared<>();
+        this->layer3 = std::make_shared<>();
+        this->layer4 = std::make_shared<>();
+        this->layer5 = std::make_shared<>();
 
-        this->recurrent1 = std::make_shared<snn::RResNet<96,256,20>>();
+        this->arbiter.addLayer(this->attention);
 
-        this->layer1 = std::make_shared<snn::LayerKAC<96,32,20,snn::ReLu>>();
-
-        this->recurrent2 = std::make_shared<snn::RResNet<32,128,20>>();
-
-        this->decision = std::make_shared<snn::LayerKAC<32,MEMBERS_COUNT,20,snn::SoftMax>>();   
-
-        this->arbiter.addLayer(encoder);
-        this->arbiter.addLayer(recurrent1);
-        this->arbiter.addLayer(layer1);
-        this->arbiter.addLayer(recurrent2);
-        this->arbiter.addLayer(decision);
-
-        this->layers.reserve(MEMBERS_COUNT);
-
-        for( size_t i = 0; i < MEMBERS_COUNT; ++i )
-        {
-
-            auto layer = std::make_shared<KapiBara_SubLayer>();
-
-            layer->set_trainable(false);
-    
-            // auto sub_layer2 = std::make_shared<snn::LayerKAC<128,64,20,snn::ReLu>>();
-
-            this->arbiter.addLayer(layer);
-            this->layers.push_back(layer);
-            
-        }
+        this->arbiter.addLayer(this->layer1);
+        this->arbiter.addLayer(this->layer2);
+        this->arbiter.addLayer(this->layer3);
+        this->arbiter.addLayer(this->layer4);
+        this->arbiter.addLayer(this->layer5);
 
         int ret = this->arbiter.load(this->checkpoint_filename());
 
@@ -403,15 +392,31 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Network fired!");
 
-        const snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);
+        snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);
+
+        for(size_t i=0;i<64;++i)
+        {
+            output[i] = std::exp(output[i]);
+        }
+
+        output = output / output.reduce();
+
+        std::uniform_real_distribution<float> dis(0.0, 1.0);
+
+        float random_value = dis(this->gen);
+
+        float action_cumulator = 0.f;
 
         size_t max_iter = 0;
 
-        for(size_t i=1;i<64;i++)
+        for(size_t i=0;i<64;i++)
         {
-            if(output[i]>output[max_iter])
+            action_cumulator += output[i];
+
+            if(action_cumulator >= random_value)
             {
                 max_iter = i;
+                break;
             }
         }
 
@@ -475,7 +480,8 @@ class KapiBaraMind : public rclcpp::Node
     }
 
     KapiBaraMind()
-    : Node("kapibara_mind")
+    : Node("kapibara_mind"),
+    gen(rd)
     {
 
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
@@ -537,35 +543,16 @@ class KapiBaraMind : public rclcpp::Node
     snn::SIMDVectorLite<64> fire_network(const snn::SIMDVectorLite<686>& input)
     {
 
-        auto output = this->encoder->fire(input);
+        auto output = this->attention->process(input);
 
-        // output = output / output.size();
+        auto output2 = this->layer1->fire(output);
+        auto output3 = this->layer2->fire(output2);
+        auto output4 = this->layer3->fire(output3);
+        auto output5 = this->layer4->fire(output4);
+        auto output6 = this->layer5->fire(output5);
 
-        auto output1 = this->recurrent1->fire(output);
 
-        auto output2 = this->layer1->fire(output1);
-
-        // output2 = output2 / output2.size();
-
-        auto output3 = this->recurrent2->fire(output2);
-
-        auto picker = this->decision->fire(output3);
-
-        // select layer based on softmax output of picker
-
-        this->max_iter = 0;
-
-        for(size_t i=1;i<MEMBERS_COUNT;i++)
-        {
-            if(picker[i]>picker[max_iter])
-            {
-                max_iter = i;
-            }
-        }
-
-        auto out = this->layers[max_iter]->fire(output3);
-
-        return out;
+        return output6;
     }
 
     ~KapiBaraMind()
