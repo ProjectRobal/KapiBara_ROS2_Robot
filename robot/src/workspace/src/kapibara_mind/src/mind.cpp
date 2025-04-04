@@ -171,13 +171,13 @@ class KapiBaraMind : public rclcpp::Node
 
     void init_network()
     {
-        this->attention = std::make_shared<>();
+        this->attention = std::make_shared<snn::Attention<686,256,64,20>>();
 
-        this->layer1 = std::make_shared<>();
-        this->layer2 = std::make_shared<>();
-        this->layer3 = std::make_shared<>();
-        this->layer4 = std::make_shared<>();
-        this->layer5 = std::make_shared<>();
+        this->layer1 = std::make_shared<snn::LayerKAC<256,4096,20>>();
+        this->layer2 = std::make_shared<snn::LayerKAC<4096,2048,20,snn::ReLu>>();
+        this->layer3 = std::make_shared<snn::LayerKAC<2048,512,20,snn::ReLu>>();
+        this->layer4 = std::make_shared<snn::LayerKAC<512,256,20,snn::ReLu>>();
+        this->layer5 = std::make_shared<snn::LayerKAC<256,64,20>>();
 
         this->arbiter.addLayer(this->attention);
 
@@ -380,11 +380,7 @@ class KapiBaraMind : public rclcpp::Node
 
         this->arbiter.applyReward(reward);
 
-        this->layers[this->max_iter]->applyReward(reward);
-
         this->arbiter.shuttle();
-
-        this->layers[this->max_iter]->shuttle();
 
     }
 
@@ -481,7 +477,7 @@ class KapiBaraMind : public rclcpp::Node
 
     KapiBaraMind()
     : Node("kapibara_mind"),
-    gen(rd)
+    gen(rd())
     {
 
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");

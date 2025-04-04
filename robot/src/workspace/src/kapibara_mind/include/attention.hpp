@@ -30,8 +30,8 @@ namespace snn
         snn::SIMDVectorLite<OutputSize> process(const snn::SIMDVectorLite<InputSize>& input)
         {   
             // push current input to buffer
-            this->last_actions.pop_back();
-            this->last_actions.push_front(input);
+            this->last_actions.pop_front();
+            this->last_actions.push_back(input);
 
             this->cached_attention.pop_back();
             this->scores.pop_back();
@@ -89,11 +89,11 @@ namespace snn
 
             for(size_t i=0;i<ActionCount;++i)
             {
-                snn::SIMDVectorLite<582> action;
+                snn::SIMDVectorLite<InputSize> action;
 
                 this->last_actions.push_back(action);
 
-                snn::SIMDVectorLite<256> cache;
+                snn::SIMDVectorLite<OutputSize> cache;
 
                 this->cached_attention.push_back(cache);
 
