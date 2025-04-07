@@ -1,3 +1,1 @@
-uint8 id
-uint16 frequency
-uint16 power
+bool[8] pin_state

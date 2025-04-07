@@ -23,7 +23,7 @@ rm -R robot/src/workspace/install
 
 elif [ "$arg" = "stop" ]; then
 
-docker compose -f compose_sim.yml stop -t 3600
+docker compose -f compose.yml stop -t 3600
 
 elif [ "$arg" = "compile" ]; then
 

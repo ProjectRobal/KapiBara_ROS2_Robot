@@ -654,6 +654,12 @@ class EmotionEstimator(Node):
             
     def sense_callabck(self,sense:PiezoSense):
         
+        # should be rewritten 
+        
+        pin_states = sense.pin_states
+        
+        return
+        
         if sense.id == 0:
             
             delta = sense.power
@@ -667,12 +673,12 @@ class EmotionEstimator(Node):
             # self.get_logger().info("Current delta: {}".format(delta))
             
             
-            if abs(delta) > 120 and abs(delta) < 200:
+            if abs(delta) > 700:
                 self.good_sense = 10.0
                 self.get_logger().info('Pat occured: {}'.format(delta))
                 score = 10
                 
-                self.stop_mind()
+                # self.stop_mind()
                 
             
             if score !=0 and len(self.current_embeddings)>0:
@@ -868,9 +874,8 @@ class EmotionEstimator(Node):
         
         self.face_database.commit()      
         
-    def on_shutdown(self,sig, frame):
+    def on_shutdown(self):
         self.commit_faces()
-
 
 
 def main(args=None):
@@ -878,7 +883,16 @@ def main(args=None):
 
     emotion_estimator = EmotionEstimator()
     
-    signal.signal(signal.SIGINT,emotion_estimator.on_shutdown)
+    def on_sigint(sig,frame):
+        
+        emotion_estimator.on_shutdown()
+        
+        rclpy.shutdown()
+        print("Shutdown")
+        exit(0)
+
+    
+    signal.signal(signal.SIGINT,on_sigint)
 
     rclpy.spin(emotion_estimator)
     

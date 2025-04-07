@@ -154,9 +154,10 @@ void can_task(std::shared_ptr<BridgeNode> node)
 
                     auto _sense = kapibara_interfaces::msg::PiezoSense();
 
-                    _sense.id = sense->id;
-                    _sense.frequency = sense->frequency;
-                    _sense.power = sense->power;
+                    for(int i=0;i<8;i++)
+                    {
+                        _sense.pin_state[i] = sense->pin_states & (1<<i);
+                    }
 
                     sense_publisher->publish(_sense);
 

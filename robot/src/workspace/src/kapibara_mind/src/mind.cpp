@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <csignal> 
 #include <random>
+#include <signal.h>
 
 
 
@@ -554,21 +555,43 @@ class KapiBaraMind : public rclcpp::Node
         return output6;
     }
 
-    ~KapiBaraMind()
+    void shutdown()
     {
         this->stop_motors();
 
         this->save_network();
     }
 
+    ~KapiBaraMind()
+    {
+        
+    }
+
 };
+
+
+std::function<void(int)> shutdown_handler;
+void signal_handler(int signal) { shutdown_handler(signal); }
 
 
 int main(int argc,char** argv)
 {   
     rclcpp::init(argc, argv);
 
+
     auto node = std::make_shared<KapiBaraMind>();
+
+    shutdown_handler = [node](int signal)->void    {
+        
+        node->shutdown();
+
+        rclcpp::shutdown();
+
+        exit(0);
+
+    };
+
+    std::signal(SIGINT,signal_handler);
 
     rclcpp::spin(node);
 

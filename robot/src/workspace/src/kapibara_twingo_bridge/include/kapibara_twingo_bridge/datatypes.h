@@ -3,6 +3,8 @@
 #pragma GCC optimize ("O0")
 #pragma pack(1)
 
+#include <stdint.h>
+
 #define PACKET_TYPE_COUNT 4
 
 typedef enum packet_type
@@ -21,9 +23,7 @@ typedef struct ping_msg
 
 typedef struct sense
 {
-    uint16_t frequency;
-    uint16_t power;
-    uint8_t id;
+    uint8_t pin_states;
 } sense_t;
 
 typedef struct ack_msg
