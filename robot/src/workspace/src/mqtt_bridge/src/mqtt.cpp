@@ -180,7 +180,7 @@ public:
 
         uint32_t buffer_size = msg->buffor_size;
 
-        uint8_t* buffer = new uint8_t[buffer_size*sizeof(int32_t)];
+        uint8_t* buffer = new uint8_t[buffer_size*sizeof(int32_t)*2];
 
         for( uint32_t i = 0; i < buffer_size; i+= 2 )
         {
@@ -208,7 +208,7 @@ public:
 
         }
         
-        this->mqtt_client_->publish("/microphone",buffer,buffer_size*sizeof(int32_t));
+        this->mqtt_client_->publish("/microphone",buffer,buffer_size*sizeof(int32_t)*2);
 
         delete [] buffer;
     }
