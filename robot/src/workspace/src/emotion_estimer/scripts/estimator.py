@@ -26,6 +26,8 @@ from kapibara_interfaces.msg import FaceEmbed
 
 from kapibara_interfaces.srv import StopMind
 
+from threading import Lock
+
 
 import signal
 
@@ -105,6 +107,10 @@ class EmotionEstimator(Node):
         
         # store 500 face embeddings + rewards
         self.embeddings_buffor = np.zeros((500,160),dtype=np.float32)
+        
+        
+        self._emotions_lock = Lock()
+        self._face_lock = Lock()
         
         
         self.current_embeddings = []
@@ -355,12 +361,16 @@ class EmotionEstimator(Node):
         self.get_logger().info('Mind started!')
     
         
-    def commit_faces(self):
+    def commit_faces(self,timeout=False):
+        
+        self._face_lock.acquire( timeout = 60 if timeout else 0 )
         
         self.get_logger().info("Saving faces data!")
         
         self.face_database.commit()
         self.faces_score.commit()
+        
+        self._face_lock.release()
         
     def search_ids_to_num(self,ids:str)->int:
         return int(ids[3:])
@@ -406,6 +416,8 @@ class EmotionEstimator(Node):
         
         face_score = 0
         
+        self._face_lock.acquire()
+        
         if len(self.current_embeddings)>0:
             # sort by distances from robot                
             self.current_embeddings = sorted(self.current_embeddings,key=lambda x: x[1],reverse=True)
@@ -435,7 +447,12 @@ class EmotionEstimator(Node):
                     
                     self.faces_score.update_face_time(_ids)
                     
-                    
+        
+        self._face_lock.release()
+        
+        
+        self._emotions_lock.acquire()
+        
         if self.pain_value > 0.5:
             self.good_sense = 0.0
                     
@@ -470,13 +487,20 @@ class EmotionEstimator(Node):
             
         if self.jerk_fear <= 0.01:
             self.jerk_fear = 0.0
+            
+        self._emotions_lock.release()
         
         return emotions
         
            
     def procratination_timer_callback(self):
+        
+        self._emotions_lock.acquire()
+        
         if self.procratination_counter < 10000:
             self.procratination_counter = self.procratination_counter + 1
+            
+        self._emotions_lock.release()
             
     def camera_listener(self, msg:CompressedImage):
         self.get_logger().debug('I got image with format: %s' % msg.format)
@@ -491,6 +515,8 @@ class EmotionEstimator(Node):
         image = self.bridge.compressed_imgmsg_to_cv2(msg)
         
         # face detection:
+        
+        self._face_lock.acquire()
         
         boxes,scores = self.face_detect.inference(image)
         
@@ -528,6 +554,8 @@ class EmotionEstimator(Node):
         face.embedding = mean_embed.tolist()
         
         self.face_publisher.publish(face)
+        
+        self._face_lock.release()
         
         start = timer()
         
@@ -661,14 +689,30 @@ class EmotionEstimator(Node):
             
             if passed == 2:
                 self.get_logger().debug("Found wall!")
+                
+                self._emotions_lock.acquire()
+                
                 self.found_wall = True
+                
+                self._emotions_lock.release()
+                
                 return
         elif len(spot_locations)==1:
             self.get_logger().debug("Found wall!")
+            
+            self._emotions_lock.acquire()
+            
             self.found_wall = True
+            
+            self._emotions_lock.release()
+            
             return
         
+        self._emotions_lock.acquire()
+        
         self.found_wall = False
+        
+        self._emotions_lock.release()
         
             
     def sense_callabck(self,sense:PiezoSense):
@@ -685,17 +729,29 @@ class EmotionEstimator(Node):
         if not front_bumper or not back_bumper:
             self.get_logger().info("Pain occured by bumper!")
             
+            self._emotions_lock.acquire()
+            
             self.pain_value = 1.0
+            
+            self._emotions_lock.release()
                 
         if patting_sense:
             
             self.get_logger().debug('Patting detected')
             
+            
+            self._emotions_lock.acquire()
+            
             self.good_sense = 10.0
+            
+            self._emotions_lock.release()
+            
+            
             score = 10
                                                     
             self.stop_mind()
-                
+            
+            self._face_lock.acquire()
             
             if score !=0 and len(self.current_embeddings)>0:
                 # check if spotted face are present in database:
@@ -736,32 +792,7 @@ class EmotionEstimator(Node):
                 self.faces_score.add_face(faces_in_database+1,score)
                 self.get_logger().info("Face with "+ids+" has been added!")
                 
-            
-    def points_callback(self,points:PointCloud2):
-        
-        if len(points.fields) < 4:
-            self.get_logger().error("Invalid point cloud message")
-            return
-        
-        width = points.width
-        height = points.height
-        
-        points = np.frombuffer(points.data,dtype=np.float32)
-        
-        points = points[2:len(points):4]
-        
-        # 4 becaue we have 4 fields
-        if len(points) < width*height:
-            self.get_logger().error("Invalid number of point in cloud message")
-            return
-        
-        points = points.reshape((height,width,1))
-        
-        self.points_covarage = ( points < 1.2 ).sum() 
-                
-        self.get_logger().debug("Depth covarage: "+str(self.points_covarage))
-        
-        
+            self._face_lock.release()
         
     
     def odom_callback(self,odom:Odometry):
@@ -771,10 +802,21 @@ class EmotionEstimator(Node):
         
         self.get_logger().debug("Odom recive velocity of "+str(velocity)+" and angular velocity of "+str(angular))
         if velocity > 0.0001 or angular > 0.00001:
+            
+            self._emotions_lock.acquire()
+            
             self.move_lock = True
             self.procratination_counter = 0
+            
+            self._emotions_lock.release()
+            
         else:
-            self.move_lock = False        
+            
+            self._emotions_lock.acquire()
+            
+            self.move_lock = False       
+            
+            self._emotions_lock.release() 
         
     def imu_callback(self,imu:Imu):
         accel=imu.linear_acceleration
@@ -784,9 +826,15 @@ class EmotionEstimator(Node):
         if accel_value > 0.25:
             self.get_logger().info("Pain occured!")
             
+            self._emotions_lock.acquire()
+            
             self.pain_value = 1.0
             
+            self._emotions_lock.release()
+            
             score = -10.0
+            
+            self._face_lock.acquire()
             
             if len(self.current_embeddings)>0:
                 # check if spotted face are present in database:
@@ -826,6 +874,8 @@ class EmotionEstimator(Node):
                 self.faces.setBlock([ids],[nearest_face[0]])                
                 self.faces_score.add_face(faces_in_database+1,score)
                 self.get_logger().info("Face with "+ids+" has been added!")
+            
+            self._face_lock.release()
         
         self.thrust = abs(accel_value-self.last_accel)
         
@@ -836,8 +886,14 @@ class EmotionEstimator(Node):
 
         if self.thrust > 1.0:
             self.get_logger().info("Too harsh force")
+            
+            self._emotions_lock.acquire()
+            
             self.thrust_fear = 1.0
+            
             self.procratination_counter = 0
+            
+            self._emotions_lock.release()
         
         angular = imu.angular_velocity
         
@@ -852,8 +908,14 @@ class EmotionEstimator(Node):
         
         if self.angular_jerk > 40.0:        
             self.get_logger().info("I feel dizzy")
+            
+            self._emotions_lock.acquire()
+            
             self.jerk_fear = 1.0
+            
             self.procratination_counter = 0
+            
+            self._emotions_lock.release()
     
     def mic_callback(self,mic:Microphone):
         # I have to think about it
@@ -882,16 +944,26 @@ class EmotionEstimator(Node):
         
         self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
         
+        
+        
+        self._emotions_lock.acquire()
+        
         self.audio_output = output
+        
+        self._emotions_lock.release()
         
     def save_faces(self):
         
+        self._face_lock.acquire()
+        
         self.get_logger().info("Saving faces embeddings!")
         
-        self.face_database.commit()      
+        self.face_database.commit() 
+        
+        self._face_lock.release()     
         
     def on_shutdown(self):
-        self.commit_faces()
+        self.commit_faces( timeout = True )
 
 
 def main(args=None):
