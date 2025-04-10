@@ -118,6 +118,8 @@ class KapiBaraMind : public rclcpp::Node
 
     size_t power_counter;
 
+    bool sleeping;
+
     std::shared_ptr<snn::Attention<686,256,64,20>> attention;
 
     std::shared_ptr<snn::LayerKAC<256,4096,20>> layer1;
@@ -383,6 +385,14 @@ class KapiBaraMind : public rclcpp::Node
 
         long double reward = emotions->happiness*40.f + emotions->fear*-10.f + emotions->uncertainty*-2.f + emotions->angry*-5.f + emotions->boredom*-1.f;
 
+        // wake when robot is feared
+        if(( emotions->fear > 0.0f )||( emotions->happiness > 9.0f ))
+        {
+            this->sleeping = false;
+
+            this->power_counter = 0;
+        }
+
         this->arbiter.applyReward(reward);
 
         this->arbiter.shuttle();
@@ -392,6 +402,30 @@ class KapiBaraMind : public rclcpp::Node
     void network_callback()
     {
         RCLCPP_DEBUG(this->get_logger(),"Network fired!");
+
+        this->power_counter ++;
+
+        if( this->sleeping )
+        {
+
+            geometry_msgs::msg::Twist twist;
+
+            twist.angular.z = 0.f;
+
+            twist.linear.x = 0.f;
+
+            this->twist_publisher->publish(twist);
+
+            // wake after 5 minutes
+            if( this->power_counter > 3000 )
+            {
+                this->power_counter = 0;
+
+                this->sleeping = false;
+            }
+            
+            return;
+        }
 
         snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);
 
@@ -457,6 +491,14 @@ class KapiBaraMind : public rclcpp::Node
         twist.linear.x = -linear_speed;
 
         this->twist_publisher->publish(twist);
+
+        // sleep each 10 minutes
+        if( this->power_counter > 6000 )
+        {
+            this->power_counter = 0;
+
+            this->sleeping = true;
+        }
     }
 
     void save_network_callback()
@@ -495,6 +537,8 @@ class KapiBaraMind : public rclcpp::Node
 
         this->power_counter = 0;
 
+        this->sleeping = false;
+
         this->inputs = snn::SIMDVectorLite<686>(0);
 
         this->init_network();
@@ -529,7 +573,7 @@ class KapiBaraMind : public rclcpp::Node
 
         this->network_timer = this->create_wall_timer(100ms, std::bind(&KapiBaraMind::network_callback, this));
 
-        // save each 10min
+        // save each 60min
         this->network_save_timer= this->create_wall_timer(60min, std::bind(&KapiBaraMind::save_network_callback, this));
     }
 
@@ -554,7 +598,6 @@ class KapiBaraMind : public rclcpp::Node
         auto output4 = this->layer3->fire(output3);
         auto output5 = this->layer4->fire(output4);
         auto output6 = this->layer5->fire(output5);
-
 
         return output6;
     }

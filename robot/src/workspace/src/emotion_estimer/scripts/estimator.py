@@ -719,7 +719,7 @@ class EmotionEstimator(Node):
         
         # should be rewritten 
         
-        pin_states = sense.pin_states
+        pin_states = sense.pin_state
         
         front_bumper = pin_states[2]
         back_bumper = pin_states[3]
@@ -985,7 +985,7 @@ def main(args=None):
     
     signal.signal(signal.SIGINT,on_sigint)
 
-    exectuor.spin(emotion_estimator)
+    exectuor.spin()
     
     rclpy.shutdown()
 
