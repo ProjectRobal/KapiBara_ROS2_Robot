@@ -182,7 +182,7 @@ public:
 
         uint8_t* buffer = new uint8_t[buffer_size*sizeof(int32_t)*2];
 
-        for( uint32_t i = 0; i < buffer_size; i+= 2 )
+        for( uint32_t i = 0; i < buffer_size*2; i+= 2 )
         {
             uint32_t offset = i*sizeof(int32_t);
 
@@ -195,7 +195,7 @@ public:
 
         }
 
-        for( uint32_t i = 1; i < buffer_size; i+= 2 )
+        for( uint32_t i = 1; i < buffer_size*2; i+= 2 )
         {
             uint32_t offset = i*sizeof(int32_t);
 

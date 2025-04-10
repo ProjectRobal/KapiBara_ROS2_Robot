@@ -116,6 +116,8 @@ class KapiBaraMind : public rclcpp::Node
 
     size_t max_iter;
 
+    size_t power_counter;
+
     std::shared_ptr<snn::Attention<686,256,64,20>> attention;
 
     std::shared_ptr<snn::LayerKAC<256,4096,20>> layer1;
@@ -490,6 +492,8 @@ class KapiBaraMind : public rclcpp::Node
         this->declare_parameter("max_angular_speed", 2.f);
 
         this->max_iter = 0;
+
+        this->power_counter = 0;
 
         this->inputs = snn::SIMDVectorLite<686>(0);
 

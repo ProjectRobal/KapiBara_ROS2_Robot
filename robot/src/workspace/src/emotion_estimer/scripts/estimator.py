@@ -4,6 +4,8 @@ import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import Float64MultiArray
+from rclpy.executors import MultiThreadedExecutor
+
 
 from sensor_msgs.msg import Range,Imu,PointCloud2
 from geometry_msgs.msg import Quaternion
@@ -48,6 +50,8 @@ from emotion_estimer.midas import midasDepthEstimator
 
 from emotion_estimer.DeepIDTFLite import DeepIDTFLite
 from emotion_estimer.TFLiteFaceDetector import UltraLightFaceDetecion
+
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 
 from emotion_estimer.face_data import FaceData,FaceObj
 
@@ -890,11 +894,14 @@ def main(args=None):
         rclpy.shutdown()
         print("Shutdown")
         exit(0)
+        
+    exectuor = MultiThreadedExecutor()
 
+    exectuor.add_node(emotion_estimator)
     
     signal.signal(signal.SIGINT,on_sigint)
 
-    rclpy.spin(emotion_estimator)
+    exectuor.spin(emotion_estimator)
     
     rclpy.shutdown()
 
