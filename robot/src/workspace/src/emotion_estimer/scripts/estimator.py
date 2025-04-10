@@ -114,7 +114,20 @@ class EmotionEstimator(Node):
         # uncertainty
         # boredom 
         # anguler values for each emotions state
-        self.emotions_angle=[0.0,180.0,25.0,145.0,90.0]    
+        self.emotions_angle=[0.0,180.0,25.0,145.0,90.0]  
+        
+        # Sensor callback group
+        self.sensor_callback_group = MutuallyExclusiveCallbackGroup()
+        
+        # Callback group for camera and faces
+        self.camera_callback_group = MutuallyExclusiveCallbackGroup()
+        
+        # Callback group for mic
+        self.mic_callback_group = MutuallyExclusiveCallbackGroup()
+        
+        # Callback group for others timers
+        self.timers_callback_group = MutuallyExclusiveCallbackGroup()
+          
         
         self.ears_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('ears_topic').get_parameter_value().string_value, 10)
        
@@ -166,7 +179,8 @@ class EmotionEstimator(Node):
             CompressedImage,
             self.get_parameter('camera_topic').get_parameter_value().string_value,
             self.camera_listener,
-            10)
+            10,
+            callback_group=self.camera_callback_group)
         self.subscription  # prevent unused variable warning
         
         
@@ -185,9 +199,10 @@ class EmotionEstimator(Node):
         self.jerk_fear = 0.0
         
         self.procratination_counter = 0
-        self.procratination_timer = self.create_timer(2.0, self.procratination_timer_callback)
+        self.procratination_timer = self.create_timer(2.0, self.procratination_timer_callback,callback_group=self.timers_callback_group)
         
         # parameter that describe fear distance threshold for laser sensor
+        
         
         self.range_threshold = self.get_parameter('range_threshold').get_parameter_value().double_value
         
@@ -196,14 +211,14 @@ class EmotionEstimator(Node):
         imu_topic = self.get_parameter('imu').get_parameter_value().string_value
         
         self.get_logger().info("Creating subscription for IMU sensor at topic: "+imu_topic)
-        self.imu_subscripe = self.create_subscription(Imu,imu_topic,self.imu_callback,10)
+        self.imu_subscripe = self.create_subscription(Imu,imu_topic,self.imu_callback,10,callback_group=self.sensor_callback_group)
         
         # Sense callback
         
         sense_topic = self.get_parameter('sense_topic').get_parameter_value().string_value
         
         self.get_logger().info("Creating subscription for Pizeo Sense at topic: "+sense_topic)
-        self.sense_subscripe = self.create_subscription(PiezoSense,sense_topic,self.sense_callabck,10)
+        self.sense_subscripe = self.create_subscription(PiezoSense,sense_topic,self.sense_callabck,10,callback_group=self.sensor_callback_group)
     
         
         # Microphone callback use audio model 
@@ -213,16 +228,16 @@ class EmotionEstimator(Node):
         self.mic_buffor = np.zeros(2*16000,dtype=np.float32)
         
         self.get_logger().info("Creating subscription for Microphone at topic: "+mic_topic)
-        self.mic_subscripe = self.create_subscription(Microphone,mic_topic,self.mic_callback,10)
+        self.mic_subscripe = self.create_subscription(Microphone,mic_topic,self.mic_callback,10,callback_group=self.mic_callback_group)
         
         # Subcription for odometry
         
         odom_topic = self.get_parameter('odom').get_parameter_value().string_value
         self.get_logger().info("Creating subscription for odometry sensor at topic: "+odom_topic)
-        self.odom_subscripe = self.create_subscription(Odometry,odom_topic,self.odom_callback,10)
+        self.odom_subscripe = self.create_subscription(Odometry,odom_topic,self.odom_callback,10,callback_group=self.sensor_callback_group)
         
         self.get_logger().info("Creating publisher for spoted faces")
-        self.face_publisher = self.create_publisher(FaceEmbed, 'spoted_faces', 10)
+        self.face_publisher = self.create_publisher(FaceEmbed, 'spoted_faces', 10,callback_group=self.camera_callback_group)
         
         # Point Cloud 2 callbck
         
@@ -250,12 +265,12 @@ class EmotionEstimator(Node):
         # self.get_logger().info("Creating subscription for Point Cloud sensor at topic: "+points_topic)
         # self.point_subscripe = self.create_subscription(PointCloud2,points_topic,self.points_callback,10)
                 
-        self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer)
+        self.ears_timer = self.create_timer(0.05, self.ears_subscriber_timer,callback_group=self.timers_callback_group)
         
-        self.face_commit_timer = self.create_timer(60*30, self.commit_faces)
+        self.face_commit_timer = self.create_timer(60*30, self.commit_faces,callback_group=self.camera_callback_group)
         
         # each 30 minutes
-        self.save_face_timer = self.create_timer(30*60, self.save_face_timer_callback)
+        self.save_face_timer = self.create_timer(30*60, self.save_face_timer_callback,callback_group=self.camera_callback_group)
         
         self.face_db_name:str = self.get_parameter('face_db').get_parameter_value().string_value+".db"
         
@@ -277,7 +292,7 @@ class EmotionEstimator(Node):
         
         # KapiBara mind stop timer:
         
-        self.start_again_mind = self.create_timer(15,self.start_again_mind_callback)
+        self.start_again_mind = self.create_timer(15,self.start_again_mind_callback,callback_group=self.timers_callback_group)
         self.start_again_mind.cancel()
         
         self.stop_mind_srv = self.create_client(StopMind,'stop_mind')
@@ -662,27 +677,24 @@ class EmotionEstimator(Node):
         
         pin_states = sense.pin_states
         
-        return
+        front_bumper = pin_states[2]
+        back_bumper = pin_states[3]
         
-        if sense.id == 0:
+        patting_sense = pin_states[4]
+        
+        if not front_bumper or not back_bumper:
+            self.get_logger().info("Pain occured by bumper!")
             
-            delta = sense.power
-            
-            val = sense.frequency
-            
-            self.get_logger().debug('Sense: F: {} P: {} T: {}\n'.format(val,delta,self._thrust))
-            
-            score = 0
-                        
-            # self.get_logger().info("Current delta: {}".format(delta))
-            
-            
-            if abs(delta) > 700:
-                self.good_sense = 10.0
-                self.get_logger().info('Pat occured: {}'.format(delta))
-                score = 10
+            self.pain_value = 1.0
                 
-                # self.stop_mind()
+        if patting_sense:
+            
+            self.get_logger().debug('Patting detected')
+            
+            self.good_sense = 10.0
+            score = 10
+                                                    
+            self.stop_mind()
                 
             
             if score !=0 and len(self.current_embeddings)>0:
