@@ -24,9 +24,21 @@
 
 # # xargs apt -y install < /app/dep/packages.txt
 
+# cleanup() {
+#     echo "Caught termination signal. Cleaning up..."
+#     kill -SIGINT 1  # Send SIGINT to all subprocesses
+#     wait               # Wait for processes to terminate
+#     echo "Cleanup done. Exiting."
+#     exit 0
+# }
+
+# # Trap SIGINT
+# trap cleanup SIGINT
+
 echo "Ready to go!!"
 
-# /run.sh
+# /run.sh &
+
 
 # Simulate long-running process
 while true; do

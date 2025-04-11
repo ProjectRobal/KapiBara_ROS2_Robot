@@ -466,7 +466,9 @@ class EmotionEstimator(Node):
         # happiness
         # uncertainty
         # bordorm
-        emotions[0] = (self.audio_output == 4)*0.1
+        
+        # I need to adjust sound model so anger will be zero for now
+        emotions[0] = (self.audio_output == 4)*0.0
         emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 0.5*self.pain_value
         emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
         emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1
