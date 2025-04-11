@@ -60,7 +60,7 @@ from emotion_estimer.face_data import FaceData,FaceObj
 
 from tiny_vectordb import VectorDatabase
 
-FACE_TOLERANCE = 0.9
+FACE_TOLERANCE = 0.94
 
 class EmotionEstimator(Node):
 
@@ -470,7 +470,7 @@ class EmotionEstimator(Node):
         
         # I need to adjust sound model so anger will be zero for now
         emotions[0] = (self.audio_output == 4)*0.0
-        emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 0.5*self.pain_value
+        emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 1.0*self.pain_value
         emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
         emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1
         emotions[4] = np.floor(self.procratination_counter/5.0)
@@ -739,7 +739,7 @@ class EmotionEstimator(Node):
             
             self._emotions_lock.acquire()
             
-            self.pain_value = 1.0
+            self.pain_value = 10.0
             
             self._emotions_lock.release()
                 
@@ -781,6 +781,7 @@ class EmotionEstimator(Node):
                         self.faces_score.update_face(ids,score)
                         
                         self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
+                        self._face_lock.release()
                         return
                     
                 
@@ -794,6 +795,7 @@ class EmotionEstimator(Node):
                         self.get_logger().info("Face with "+ids+" has been overwritten!")
                         
                         self.faces_score.update_face(ids,score)
+                        self._face_lock.release()
                         return
                 
                 self.faces.setBlock([ids],[nearest_face[0]])                
@@ -864,6 +866,7 @@ class EmotionEstimator(Node):
                         self.faces_score.update_face(ids,score)
                         
                         self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
+                        self._face_lock.release()
                         return
                     
                 
@@ -877,6 +880,7 @@ class EmotionEstimator(Node):
                         self.get_logger().info("Face with "+ids+" has been overwritten!")
                         
                         self.faces_score.update_face(ids,score)
+                        self._face_lock.release()
                         return
                 
                 self.faces.setBlock([ids],[nearest_face[0]])                
