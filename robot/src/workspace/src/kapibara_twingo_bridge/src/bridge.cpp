@@ -109,6 +109,10 @@ void clear_ack_filter()
     ack_filter_mux.unlock();
 }
 
+std::mutex term_lock_mux;
+
+volatile bool terminate = false;
+
 
 // sepeare task for can reciving
 void can_task(std::shared_ptr<BridgeNode> node)
@@ -118,9 +122,12 @@ void can_task(std::shared_ptr<BridgeNode> node)
 
     rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("ping",10);
 
+    term_lock_mux.lock();
 
-    while(1)
+    while( !terminate )
     {
+        term_lock_mux.unlock();
+
         const CanFrame* frame = can.recive();
 
         if( frame == NULL )
@@ -201,12 +208,17 @@ void can_task(std::shared_ptr<BridgeNode> node)
                 break;
         }
 
+    
+        term_lock_mux.lock();
+
     }
 
 }
 
 // services
 
+std::function<void(int)> shutdown_handler;
+void signal_handler(int signal) { shutdown_handler(signal); }
 
 int main(int argc, char const *argv[])
 {
@@ -225,6 +237,24 @@ int main(int argc, char const *argv[])
     }
 
     std::thread can_thread(can_task,node);
+
+    shutdown_handler = [&can_thread](int signal)->void    {
+
+        rclcpp::shutdown();
+
+        term_lock_mux.lock();
+
+        terminate = true;
+
+        term_lock_mux.unlock();
+
+        can_thread.join();
+        
+        exit(0);
+
+    };
+
+    std::signal(SIGINT,signal_handler);
     
     rclcpp::spin(node);
     can_thread.join();

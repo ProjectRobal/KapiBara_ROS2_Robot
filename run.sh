@@ -6,7 +6,7 @@ arg=$1
 
 if [ "$arg" = "start" ]; then
 
-docker compose -f compose.yml up
+docker compose -f compose.yml up -t 3600
 
 elif [ "$arg" = "start_ros" ]; then
 

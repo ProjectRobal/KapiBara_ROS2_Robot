@@ -978,9 +978,10 @@ def main(args=None):
     
     def on_sigint(sig,frame):
         
+        rclpy.shutdown()
+        
         emotion_estimator.on_shutdown()
         
-        rclpy.shutdown()
         print("Shutdown")
         exit(0)
         

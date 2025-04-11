@@ -231,10 +231,13 @@ public:
         this->mqtt_client_->publish(mqtt::make_message("/emotion_state_callback", data));
     }
 
-    ~MQTTROSBridge()
+    void shutdown()
     {
         this->mqtt_client_->disconnect();
+    }
 
+    ~MQTTROSBridge()
+    {
         delete this->mqtt_client_;
     }
 
@@ -252,9 +255,26 @@ private:
     rclcpp::Client<kapibara_interfaces::srv::StopMind>::SharedPtr stop_mind_client;
 };
 
+std::function<void(int)> shutdown_handler;
+void signal_handler(int signal) { shutdown_handler(signal); }
+
 int main(int argc, char *argv[]) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<MQTTROSBridge>();
+
+    shutdown_handler = [node](int signal)->void    {
+
+        rclcpp::shutdown();
+
+        node->shutdown();
+        
+        exit(0);
+
+    };
+    
+    std::signal(SIGINT,signal_handler);
+
+
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;

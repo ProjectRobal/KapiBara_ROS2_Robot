@@ -5,4 +5,4 @@ source /app/src/workspace/sim_install/setup.bash
 
 cd /app/src
 
-exec ros2 launch ./launch/launch.sim.py
+exec ros2 launch ./launch/launch.sim.py sigterm_timeout:=1200

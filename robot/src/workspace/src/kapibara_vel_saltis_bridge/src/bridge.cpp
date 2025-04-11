@@ -92,6 +92,10 @@ char ack_filter[2] = {0};
 
 std::mutex service_lock_mux;
 
+std::mutex term_lock_mux;
+
+volatile bool terminate = false;
+
 Event<ack_msg_t> ack_event;
 
 EventBuffered<CONFIG_MAX_BUFFER_SIZE> cfg_event;
@@ -138,9 +142,12 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
     rclcpp::Publisher<kapibara_interfaces::msg::CanPing>::SharedPtr ping_publisher = node->create_publisher<kapibara_interfaces::msg::CanPing>("ping",10);
 
+    term_lock_mux.lock();
 
-    while(1)
+    while( !terminate  )
     {
+        term_lock_mux.unlock();
+
         const CanFrame* frame = can.recive();
 
         if( frame == NULL )
@@ -297,6 +304,8 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
             default:
                 break;
         }
+
+        term_lock_mux.lock();
 
     }
 
@@ -752,6 +761,9 @@ std::shared_ptr<vel_saltis_services::srv::GetMotorCFG::Response> response)
 }
 
 
+std::function<void(int)> shutdown_handler;
+void signal_handler(int signal) { shutdown_handler(signal); }
+
 int main(int argc, char const *argv[])
 {
     rclcpp::init(argc, argv);
@@ -785,7 +797,25 @@ int main(int argc, char const *argv[])
     rclcpp::Service<vel_saltis_services::srv::GetMotorCFG>::SharedPtr get_motor_srv = node->create_service<vel_saltis_services::srv::GetMotorCFG>("get_motor_cfg",&get_motor_cfg);
 
     std::thread can_thread(can_task,node,node->tofCount());
+
+    shutdown_handler = [&can_thread](int signal)->void    {
+
+        rclcpp::shutdown();
+
+        term_lock_mux.lock();
+
+        terminate = true;
+
+        term_lock_mux.unlock();
+
+        can_thread.join();
+        
+        exit(0);
+
+    };
     
+    std::signal(SIGINT,signal_handler);
+
     rclcpp::spin(node);
     can_thread.join();
     rclcpp::shutdown();

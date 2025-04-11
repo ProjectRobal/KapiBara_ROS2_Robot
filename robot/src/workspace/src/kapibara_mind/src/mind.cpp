@@ -630,9 +630,9 @@ int main(int argc,char** argv)
 
     shutdown_handler = [node](int signal)->void    {
         
-        node->shutdown();
-
         rclcpp::shutdown();
+
+        node->shutdown();
 
         exit(0);
 
