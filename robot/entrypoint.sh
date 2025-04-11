@@ -1,6 +1,16 @@
 #!/bin/bash
 
-udevadm control --reload 
+# cleanup() {
+#     echo "Caught termination signal. Cleaning up..."
+#     kill -SIGINT -1   # Sends SIGINT to all subprocesses
+#     wait
+#     echo "All processes terminated. Exiting."
+#     exit 0
+# }
+
+# trap cleanup SIGINT SIGTERM
+
+# udevadm control --reload 
 
 # sudo apt-get update
 
@@ -16,5 +26,9 @@ udevadm control --reload
 
 echo "Ready to go!!"
 
+# /run.sh
 
-sleep infinity
+# Simulate long-running process
+while true; do
+    sleep 1
+done

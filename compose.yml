@@ -24,6 +24,7 @@ services:
       dockerfile: ./Dockerfile
       context: ./robot
     stop_signal: SIGINT
+    stop_grace_period: 30m
     env_file:
       - ./robot/env/env
     environment:

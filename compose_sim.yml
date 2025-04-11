@@ -23,6 +23,7 @@ services:
       dockerfile: ./Dockerfile.sim
       context: ./robot
     stop_signal: SIGINT
+    stop_grace_period: 30m
     runtime: nvidia
     env_file:
       - ./robot/env/sim

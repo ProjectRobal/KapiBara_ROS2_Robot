@@ -64,4 +64,7 @@ RUN ldconfig
 
 RUN chmod -R a+x /app/cmd
 
+RUN apt install -y tini
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD [ "/entrypoint.sh" ]
