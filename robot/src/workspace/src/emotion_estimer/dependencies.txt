@@ -5,5 +5,5 @@ tensorflow
 numpy
 keras
 tf_keras
-tiny_vectordb==0.1.11
+git+https://github.com/ProjectRobal/tiny_vectordb.git
 platformdirs
