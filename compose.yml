@@ -28,7 +28,7 @@ services:
     env_file:
       - ./robot/env/env
     environment:
-      - ROS_DOMAIN_ID = 0
+      - ROS_DOMAIN_ID=0
     volumes:
       - ./robot/entrypoint.sh:/entrypoint.sh:rwx
       - ./robot/run.sh:/run.sh:rwx

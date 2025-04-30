@@ -100,11 +100,12 @@ using std::placeholders::_1;
 
 using namespace std::chrono_literals;
 
-#define MEMBERS_COUNT (64u)
 
 #define MAX_LINEAR_SPEED (4.f)
 
 #define MAX_ANGULAR_SPEED (400.f)
+
+#define POPULATION_SIZE (80)
 
 class KapiBaraMind : public rclcpp::Node
 {
@@ -116,21 +117,17 @@ class KapiBaraMind : public rclcpp::Node
 
     size_t max_iter;
 
-    size_t power_counter;
+    std::shared_ptr<snn::Attention<686,256,64,POPULATION_SIZE>> attention;
 
-    bool sleeping;
+    std::shared_ptr<snn::LayerKAC<256,4096,POPULATION_SIZE>> layer1;
 
-    std::shared_ptr<snn::Attention<686,256,64,20>> attention;
+    std::shared_ptr<snn::LayerKAC<4096,2048,POPULATION_SIZE,snn::ReLu>> layer2;
 
-    std::shared_ptr<snn::LayerKAC<256,4096,20>> layer1;
+    std::shared_ptr<snn::LayerKAC<2048,512,POPULATION_SIZE,snn::ReLu>> layer3;
 
-    std::shared_ptr<snn::LayerKAC<4096,2048,20,snn::ReLu>> layer2;
+    std::shared_ptr<snn::LayerKAC<512,256,POPULATION_SIZE,snn::ReLu>> layer4;
 
-    std::shared_ptr<snn::LayerKAC<2048,512,20,snn::ReLu>> layer3;
-
-    std::shared_ptr<snn::LayerKAC<512,256,20,snn::ReLu>> layer4;
-
-    std::shared_ptr<snn::LayerKAC<256,64,20>> layer5;
+    std::shared_ptr<snn::LayerKAC<256,64,POPULATION_SIZE>> layer5;
 
 
     snn::SIMDVectorLite<686> inputs;
@@ -155,6 +152,8 @@ class KapiBaraMind : public rclcpp::Node
     rclcpp::TimerBase::SharedPtr network_timer;
 
     rclcpp::TimerBase::SharedPtr network_save_timer;
+
+    long double last_reward;
 
     void stop_mind_handle(const std::shared_ptr<kapibara_interfaces::srv::StopMind::Request> request,
         std::shared_ptr<kapibara_interfaces::srv::StopMind::Response> response)
@@ -383,19 +382,13 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Got emotions message!");
 
-        long double reward = emotions->happiness*40.f + emotions->fear*-10.f + emotions->uncertainty*-2.f + emotions->angry*-5.f + emotions->boredom*-1.f;
-
-        // wake when robot is feared
-        if(( emotions->fear > 0.0f )||( emotions->happiness > 9.0f ))
-        {
-            this->sleeping = false;
-
-            this->power_counter = 0;
-        }
+        long double reward = emotions->happiness*320.f + emotions->fear*120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
 
         this->arbiter.applyReward(reward);
 
         this->arbiter.shuttle();
+
+        this->last_reward = reward;
 
     }
 
@@ -403,9 +396,8 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Network fired!");
 
-        this->power_counter ++;
-
-        if( this->sleeping )
+        // there is no need to do anything when robot is happy
+        if( this->last_reward >= 0.f )
         {
 
             geometry_msgs::msg::Twist twist;
@@ -415,14 +407,6 @@ class KapiBaraMind : public rclcpp::Node
             twist.linear.x = 0.f;
 
             this->twist_publisher->publish(twist);
-
-            // wake after 5 minutes
-            if( this->power_counter > 3000 )
-            {
-                this->power_counter = 0;
-
-                this->sleeping = false;
-            }
             
             return;
         }
@@ -438,22 +422,32 @@ class KapiBaraMind : public rclcpp::Node
 
         std::uniform_real_distribution<float> dis(0.0, 1.0);
 
-        float random_value = dis(this->gen);
-
-        float action_cumulator = 0.f;
-
         size_t max_iter = 0;
 
-        for(size_t i=0;i<64;i++)
+        for(size_t i=1;i<64;++i)
         {
-            action_cumulator += output[i];
-
-            if(action_cumulator >= random_value)
+            if( output[i] > output[max_iter] )
             {
                 max_iter = i;
-                break;
             }
         }
+
+        // float random_value = dis(this->gen);
+
+        // float action_cumulator = 0.f;
+
+        // size_t max_iter = 0;
+
+        // for(size_t i=0;i<64;i++)
+        // {
+        //     action_cumulator += output[i];
+
+        //     if(action_cumulator >= random_value)
+        //     {
+        //         max_iter = i;
+        //         break;
+        //     }
+        // }
 
         // decode x and y value
 
@@ -492,13 +486,6 @@ class KapiBaraMind : public rclcpp::Node
 
         this->twist_publisher->publish(twist);
 
-        // sleep each 10 minutes
-        if( this->power_counter > 6000 )
-        {
-            this->power_counter = 0;
-
-            this->sleeping = true;
-        }
     }
 
     void save_network_callback()
@@ -533,11 +520,9 @@ class KapiBaraMind : public rclcpp::Node
 
         this->declare_parameter("max_angular_speed", 2.f);
 
+        this->last_reward = 0.f;
+
         this->max_iter = 0;
-
-        this->power_counter = 0;
-
-        this->sleeping = false;
 
         this->inputs = snn::SIMDVectorLite<686>(0);
 

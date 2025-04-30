@@ -226,7 +226,7 @@ namespace snn
 
                 // sort weights based on thier rewards
 
-                if( _block.swap_count >= Populus*4 )
+                if( _block.swap_count >= Populus/2 )
                 {
                     qsort(_block.weights,Populus,sizeof(weight_t),compare_weights);
 

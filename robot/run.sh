@@ -7,4 +7,4 @@ source /app/src/workspace/install/setup.bash
 
 cd /app/src
 
-ros2 launch ./launch/launch.py sigterm_timeout:=1800
+exec ros2 launch ./launch/launch.py sigterm_timeout:=1800

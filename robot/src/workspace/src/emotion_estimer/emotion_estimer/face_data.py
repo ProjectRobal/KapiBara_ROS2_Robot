@@ -48,7 +48,7 @@ class FaceData:
         
         self.logger.info("Connecting to database: "+str(database_path))
         # connect to database
-        self.db = sqlite3.connect(database_path)
+        self.db = sqlite3.connect(database_path, check_same_thread=False)
         
         self.logger.info("Connected to database: "+str(database_path))
                 

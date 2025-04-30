@@ -304,10 +304,8 @@ class EmotionEstimator(Node):
         
         timeout_counter = 0
         
-        self._stop_mind_failed = True
-        
-        return
-        
+        self._stop_mind_failed = False
+                
         while not self.stop_mind_srv.wait_for_service(timeout_sec=20.0):
             self.get_logger().info('Stop Mind service not available, waiting again...')
             
@@ -470,7 +468,7 @@ class EmotionEstimator(Node):
         
         # I need to adjust sound model so anger will be zero for now
         emotions[0] = (self.audio_output == 4)*0.0
-        emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 1.0*self.pain_value
+        emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 4.0*self.pain_value
         emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
         emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1
         emotions[4] = np.floor(self.procratination_counter/5.0)
