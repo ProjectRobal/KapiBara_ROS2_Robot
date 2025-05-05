@@ -188,6 +188,18 @@ namespace snn
                 return -1;
             }
 
+            char num_buff[SERIALIZED_NUMBER_SIZE] = {0};
+            
+            // save hidden state 
+            for(size_t i=0;i<HiddenStateSize;++i)
+            {
+                in.read(num_buff,SERIALIZED_NUMBER_SIZE);
+                
+                number num = deserialize_number<number>(num_buff);
+
+                this->hidden_state[i] = num;
+
+            }
 
             return 0;
         }
@@ -212,6 +224,18 @@ namespace snn
             if( (this->b_matrix.save(out) != 0 ) || (this->analyzer.save(out) != 0) || (this->delta.save(out) != 0))
             {
                 return -1;
+            }
+
+            // save hidden state 
+            for(size_t i=0;i<HiddenStateSize;++i)
+            {
+
+                char* buff = serialize_number<number>(this->hidden_state[i]);
+
+                out.write(buff,SERIALIZED_NUMBER_SIZE);
+
+                delete [] buff;
+
             }
 
 

@@ -84,10 +84,7 @@ namespace snn
         {
             while(ptr<layers.size())
             {
-                if(layers[ptr]->get_trainable())
-                {
-                    layers[ptr]->shuttle();
-                }
+                layers[ptr]->shuttle();
 
                 std::lock_guard _mux(mux);
 
@@ -141,10 +138,7 @@ namespace snn
         {
             for(std::shared_ptr<Layer> layer : this->layers)
             {
-                if(layer->get_trainable())
-                {
-                    layer->applyReward(reward);
-                }
+                layer->applyReward(reward);
             }
         }
 
@@ -240,7 +234,6 @@ bool Arbiter::calculate_sha256_for_file(const std::string& filename,char* hash) 
 
 bool Arbiter::create_sha256_file(const std::string& filename) const
 {
-    char buff[32768];
 
     // SHA256 hash 
     char hash[SHA256_DIGEST_LENGTH];

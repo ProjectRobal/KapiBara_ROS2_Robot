@@ -107,6 +107,8 @@ using namespace std::chrono_literals;
 
 #define POPULATION_SIZE (80)
 
+#define ACTION_COUNT (20)
+
 class KapiBaraMind : public rclcpp::Node
 {
     std::random_device rd;
@@ -117,9 +119,9 @@ class KapiBaraMind : public rclcpp::Node
 
     size_t max_iter;
 
-    std::shared_ptr<snn::Attention<686,256,64,POPULATION_SIZE>> attention;
+    std::shared_ptr<snn::Attention<686,ACTION_COUNT,POPULATION_SIZE>> attention;
 
-    std::shared_ptr<snn::LayerKAC<256,4096,POPULATION_SIZE>> layer1;
+    std::shared_ptr<snn::LayerKAC<686,4096,POPULATION_SIZE>> layer1;
 
     std::shared_ptr<snn::LayerKAC<4096,2048,POPULATION_SIZE,snn::ReLu>> layer2;
 
@@ -177,13 +179,13 @@ class KapiBaraMind : public rclcpp::Node
 
     void init_network()
     {
-        this->attention = std::make_shared<snn::Attention<686,256,64,20>>();
+        this->attention = std::make_shared<snn::Attention<686,ACTION_COUNT,POPULATION_SIZE>>();
 
-        this->layer1 = std::make_shared<snn::LayerKAC<256,4096,20>>();
-        this->layer2 = std::make_shared<snn::LayerKAC<4096,2048,20,snn::ReLu>>();
-        this->layer3 = std::make_shared<snn::LayerKAC<2048,512,20,snn::ReLu>>();
-        this->layer4 = std::make_shared<snn::LayerKAC<512,256,20,snn::ReLu>>();
-        this->layer5 = std::make_shared<snn::LayerKAC<256,64,20>>();
+        this->layer1 = std::make_shared<snn::LayerKAC<686,4096,POPULATION_SIZE>>();
+        this->layer2 = std::make_shared<snn::LayerKAC<4096,2048,POPULATION_SIZE,snn::ReLu>>();
+        this->layer3 = std::make_shared<snn::LayerKAC<2048,512,POPULATION_SIZE,snn::ReLu>>();
+        this->layer4 = std::make_shared<snn::LayerKAC<512,256,POPULATION_SIZE,snn::ReLu>>();
+        this->layer5 = std::make_shared<snn::LayerKAC<256,64,POPULATION_SIZE>>();
 
         this->arbiter.addLayer(this->attention);
 

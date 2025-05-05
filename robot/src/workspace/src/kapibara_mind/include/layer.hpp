@@ -7,26 +7,7 @@ namespace snn
 {
     class Layer
     {
-        protected:
-
-        bool trainable;
-
         public:
-
-        Layer()
-        {
-            trainable = true;
-        }
-
-        void set_trainable(bool _trainable)
-        {
-            this->trainable = _trainable;
-        }
-
-        bool get_trainable()
-        {
-            return this->trainable;
-        }
 
         virtual void setup() = 0;
 

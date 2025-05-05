@@ -226,7 +226,7 @@ namespace snn
 
                 // sort weights based on thier rewards
 
-                if( _block.swap_count >= Populus/2 )
+                if( _block.swap_count >= Populus*4 )
                 {
                     qsort(_block.weights,Populus,sizeof(weight_t),compare_weights);
 
@@ -282,9 +282,14 @@ namespace snn
 
         number fire(const SIMDVectorLite<inputSize>& input)
         {
-            SIMDVectorLite<inputSize> res = this->worker*input;
             return ( this->worker*input ).reduce();// + this->bias;
-        }       
+        }
+        
+        SIMDVectorLite<inputSize> mult(const SIMDVectorLite<inputSize>& input)
+        {
+            return this->worker*input;
+        }
+        
 
 
         void dump(std::ostream& out) const
