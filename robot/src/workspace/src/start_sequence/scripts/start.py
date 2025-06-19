@@ -9,11 +9,6 @@ from modus_board_interfaces.srv import EnableBoards,ResetBoards
 
 from vel_saltis_services.srv import SetImuCFG,SetPIDCFG,SetFusionCFG
 
-from vel_saltis_services.msg import ImuCFG,PIDCFG,FusionCFG
-
-from kapibara_interfaces.msg import PID
-
-from geometry_msgs.msg import Vector3
 
 import json
 import time

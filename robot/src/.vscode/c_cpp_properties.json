@@ -1,0 +1,36 @@
+{
+    "configurations": [
+        {
+            "browse": {
+                "databaseFilename": "${default}",
+                "limitSymbolsToIncludedHeaders": false
+            },
+            "includePath": [
+                "/opt/ros/humble/include/**",
+                "/app/src/workspace/src/emotion_estimer/include/**",
+                "/app/src/workspace/src/gazebo_ros2_control/include/**",
+                "/app/src/workspace/src/kapibara/include/**",
+                "/app/src/workspace/src/kapibara_interfaces/include/**",
+                "/app/src/workspace/src/kapibara_mind/include/**",
+                "/app/src/workspace/src/kapibara_twingo_bridge/include/**",
+                "/app/src/workspace/src/kapibara_vel_saltis_bridge/include/**",
+                "/app/src/workspace/src/microphone/include/**",
+                "/app/src/workspace/src/modus_board/include/**",
+                "/app/src/workspace/src/modus_board_interfaces/include/**",
+                "/app/src/workspace/src/mqtt_bridge/include/**",
+                "/app/src/workspace/src/start_sequence/include/**",
+                "/app/src/workspace/src/vel_saltis_drive/include/**",
+                "/app/src/workspace/src/vel_saltis_ears/include/**",
+                "/app/src/workspace/src/vel_saltis_services/include/**",
+                "/usr/include/**",
+                "${workspaceFolder}/workspace/sim_build/kapibara_interfaces/rosidl_generator_cpp"
+            ],
+            "name": "ROS",
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "c++14"
+        }
+    ],
+    "version": 4
+}
