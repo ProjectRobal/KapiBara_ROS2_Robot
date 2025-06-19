@@ -384,7 +384,7 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Got emotions message!");
 
-        long double reward = emotions->happiness*320.f + emotions->fear*120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
+        long double reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
 
         this->arbiter.applyReward(reward);
 

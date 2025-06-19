@@ -300,25 +300,25 @@ class EmotionEstimator(Node):
         self.start_again_mind = self.create_timer(15,self.start_again_mind_callback)
         self.start_again_mind.cancel()
         
-        self.stop_mind_srv = self.create_client(StopMind,'stop_mind')
+        # self.stop_mind_srv = self.create_client(StopMind,'stop_mind')
         
         timeout_counter = 0
         
         self._stop_mind_failed = False
                 
-        while not self.stop_mind_srv.wait_for_service(timeout_sec=20.0):
-            self.get_logger().info('Stop Mind service not available, waiting again...')
+        # while not self.stop_mind_srv.wait_for_service(timeout_sec=20.0):
+        #     self.get_logger().info('Stop Mind service not available, waiting again...')
             
-            timeout_counter += 1
-            if timeout_counter > 60:
-                self.get_logger().error('Stop Mind service not available, exiting...')
+        #     timeout_counter += 1
+        #     if timeout_counter > 60:
+        #         self.get_logger().error('Stop Mind service not available, exiting...')
                 
-                self._stop_mind_failed = True
+        #         self._stop_mind_failed = True
                 
-                break
+        #         break
             
-        if not self.stop_mind_srv.service_is_ready():
-            self.get_logger().error("Stop Mind service is not available!!!")
+        # if not self.stop_mind_srv.service_is_ready():
+        #     self.get_logger().error("Stop Mind service is not available!!!")
     
     
     def stop_mind(self):
@@ -755,7 +755,7 @@ class EmotionEstimator(Node):
             
             score = 10
                                                     
-            self.stop_mind()
+            # self.stop_mind()
             
             self._face_lock.acquire()
             
