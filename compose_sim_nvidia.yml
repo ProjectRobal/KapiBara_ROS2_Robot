@@ -1,0 +1,20 @@
+include:
+  - aux_services.yaml
+
+services:
+  gazebo:
+
+    extends:
+      file: compose_sim.yml
+      service: gazebo_base
+
+    runtime: nvidia
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            # device_ids: ['1']
+            count: all
+            capabilities: [gpu]

@@ -1,0 +1,9 @@
+services:
+  mqtt:
+    container_name: mqtt_broker
+    image: emqx/nanomq:0.23
+
+    ports:
+      - 1883:1883
+      - 8083:8083
+      - 8883:8883

@@ -1,18 +1,5 @@
-version: '3.9'
-
-
 services:
-
-  mqtt:
-    container_name: mqtt_broker
-    image: emqx/nanomq:0.23
-
-    ports:
-      - 1883:1883
-      - 8083:8083
-      - 8883:8883
-
-  gazebo:
+  gazebo_base:
     container_name: kapibara_robot_sim
     network_mode: host
     image: robot_gazebo_ros
@@ -24,7 +11,6 @@ services:
       context: ./robot
     stop_signal: SIGINT
     stop_grace_period: 30m
-    runtime: nvidia
     env_file:
       - ./robot/env/sim
     environment:
@@ -42,19 +28,9 @@ services:
       - /run/dbus/:/run/dbus
       - /dev:/dev
 
-    deploy:
-      resources:
-        reservations:
-          devices:
-          - driver: nvidia
-            # device_ids: ['1']
-            count: all
-            capabilities: [gpu]
-
     devices:
       - "/dev/dri/:/dev/dri/"
       - /dev/snd:/dev/snd
-      # - "/dev/kfd:/dev/kfd"
 
     group_add:
       - video
