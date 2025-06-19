@@ -9,9 +9,18 @@ COPY ./dependencies /app/dep
 
 COPY ./debs /debs
 
+RUN apt install software-properties-common -y
+
+RUN apt install -y curl gnupg2 lsb-release
+
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | gpg --dearmor --batch --yes -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+# Add the ROS 2 repository for Jazzy (Ubuntu 24.04 is "noble")
+RUN echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2.list
+
+
 RUN --mount=type=cache,target=/var/cache/apt apt update -y
 
-RUN --mount=type=cache,target=/var/cache/apt xargs apt -y install < /app/dep/packages.txt
 
 RUN apt install git ninja-build meson udev python3-ply python3-jinja2 libglib2.0-dev libgstreamer-plugins-base1.0-dev libboost-dev libgnutls28-dev openssl libtiff-dev pybind11-dev  -y
 
