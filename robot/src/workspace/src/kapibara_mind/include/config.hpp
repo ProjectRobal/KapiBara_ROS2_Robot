@@ -12,6 +12,8 @@ typedef std::experimental::fixed_size_simd<number , MAX_SIMD_VECTOR_SIZE> SIMD;
 
 typedef std::experimental::fixed_size_simd_mask<number , MAX_SIMD_VECTOR_SIZE> SIMD_MASK;
 
+#define ERROR_THRESHOLD_KAN (0.01f)
+
 #define MAITING_THRESHOLD 0.5f
 
 #define AMOUNT_THAT_PASS 0.3f
@@ -32,10 +34,10 @@ typedef std::experimental::fixed_size_simd_mask<number , MAX_SIMD_VECTOR_SIZE> S
 
 
 // A maximum weight switch probablity
-#define MAX_SWITCH_PROBABILITY 0.1f
+#define MAX_SWITCH_PROBABILITY 0.5f
 
 // A probability at which weights are switched
-#define REWARD_TO_SWITCH_PROBABILITY -0.0005f
+#define REWARD_TO_SWITCH_PROBABILITY -0.05f
 
 // A rate at weights move to positive weight
 #define POSITIVE_P 0.1f

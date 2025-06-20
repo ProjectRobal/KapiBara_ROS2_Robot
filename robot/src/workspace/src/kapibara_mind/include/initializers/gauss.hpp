@@ -24,12 +24,12 @@ namespace snn
 
             this->gen = std::mt19937(rd());
 
-            this->global = std::normal_distribution<number>(mean,std);  
+            this->gauss = std::normal_distribution<number>(mean,std);  
         }
 
         number init()
         {
-            return this->global(this->gen);
+            return this->gauss(this->gen);
         }
     };
 }

@@ -193,9 +193,9 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
                     _imu.angular_velocity.y = fusion->imu.gyroscope.y;
                     _imu.angular_velocity.z = fusion->imu.gyroscope.z;
 
-                    _imu.linear_acceleration.x = fusion->imu.accelerometer.x;
-                    _imu.linear_acceleration.y = fusion->imu.accelerometer.y;
-                    _imu.linear_acceleration.z = fusion->imu.accelerometer.z;
+                    _imu.linear_acceleration.x = fusion->imu.accelerometer.x*G;
+                    _imu.linear_acceleration.y = fusion->imu.accelerometer.y*G;
+                    _imu.linear_acceleration.z = fusion->imu.accelerometer.z*G;
 
                     imu_publisher->publish(_imu);
 

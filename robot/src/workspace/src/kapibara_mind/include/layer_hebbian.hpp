@@ -28,6 +28,7 @@
 
 #include "initializers/hu.hpp"
 #include "initializers/gauss.hpp"
+#include "initializers/uniform.hpp"
 /*
 
 
@@ -36,34 +37,45 @@
 */
 namespace snn
 {    
-    template<size_t inputSize,size_t N,size_t Populus,class Activation = Linear,class weight_initializer = GaussInit<0.f,0.01f>>
-    class LayerKAC : public Layer
+    template<size_t inputSize,size_t N,class Activation = Linear,class weight_initializer = UniformInit<-0.01f,0.01f>>
+    class LayerHebbian : public Layer
     { 
-        const uint32_t LAYER_KAC_ID = 2148;
+        const uint32_t LAYER_HEBBIAN_ID = 2158;
 
-        BlockKAC<inputSize,Populus,weight_initializer>* blocks;
+        snn::SIMDVectorLite<inputSize> blocks[N];
+
+        number biases[N];
+
+        weight_initializer global;
 
         std::uniform_real_distribution<double> uniform;
 
+        snn::SIMDVectorLite<inputSize> past_dw;
+
+        size_t iter;
+
         size_t id;
+
+        number learning_value;
 
         struct metadata
         {
             uint32_t id;
             size_t input_size;
             size_t node_size;
-            size_t population_size;
         };
         
         public:
 
-        LayerKAC()
+        LayerHebbian()
         {
-            this->blocks = new BlockKAC<inputSize,Populus,weight_initializer>[N];
-
             this->id = LayerCounter::LayerIDCounter++ ;
 
             this->uniform=std::uniform_real_distribution<double>(0.f,1.f);
+
+            this->learning_value = 0.01f;
+
+            this->iter = 0;
         }
 
         void setup()
@@ -72,36 +84,72 @@ namespace snn
             for(size_t i=0;i<N;++i)
             {
                 // this->blocks[i]= BlockKAC<inputSize,Populus>();
-                this->blocks[i].setup();
+                for(size_t j=0;j<inputSize;++j)
+                {
+                    this->blocks[i][j] = this->global.init();
+                }
+
+                this->biases[i] = this->global.init();
+
                 // this->blocks.back().chooseWorkers();
             }
         }
 
         void applyReward(long double reward)
         {
+            // if( reward < 0 )
+            // {
+            //     this->learning_value = -0.01f;
+            // }
+            // else
+            // {
+            //     this->learning_value = 0.01f;
+            // }
 
+            // this->learning_value = ( 1.f / ( std::exp(-reward) + 1.f ) - 0.5f )*0.1f;
             // reward/=this->blocks.size();
+        }
+
+        void applyLearning(const snn::SIMDVectorLite<N>& post_activations,const snn::SIMDVectorLite<inputSize>& pre_activations)
+        {
+            UniformInit<0.f,1.f> uniform;
 
             for(size_t i=0;i<N;++i)
             {
-                this->blocks[i].giveReward(reward);
+
+                if( uniform.init() > 0.2 )
+                {
+                    continue;
+                }
+
+                number p = post_activations[i];
+
+                snn::SIMDVectorLite<inputSize> dw = this->learning_value*p*(pre_activations - this->blocks[i]*p);
+
+                this->blocks[i] += dw;
+
+                // this->biases[N] += this->learning_value*post_activations[i];
+
+                // snn::SIMDVectorLite<inputSize> compare_high = this->blocks[i] > 10.f;
+                // snn::SIMDVectorLite<inputSize> compare_low = this->blocks[i] < -10.f;
+
+                // this->blocks[i] -= ( dw*compare_high + dw*compare_low );
+
+                this->iter++;
             }
         }
 
         void shuttle()
         {
             
-            for(size_t i=0;i<N;++i)
-            {
-                this->blocks[i].chooseWorkers();
-            }   
+            
         }
 
-        static void fire_parraler(BlockKAC<inputSize,Populus,weight_initializer>* blocks,const SIMDVectorLite<inputSize>& input,SIMDVectorLite<N> &output,size_t start,size_t end)
+        static void fire_parraler(snn::SIMDVectorLite<inputSize> * blocks,number *biases,const SIMDVectorLite<inputSize>& input,SIMDVectorLite<N> &output,size_t start,size_t end)
         {
             for(;start<end;++start)
             {
-                output[start] = blocks[start].fire(input); 
+                output[start] = (blocks[start]*input).reduce();//+biases[start];
             }
         }
 
@@ -127,7 +175,7 @@ namespace snn
 
             for(size_t i=0;i<worker_count;++i)
             {
-                threads[i] = std::thread(fire_parraler,this->blocks,std::cref(input),std::ref(output),min,max);
+                threads[i] = std::thread(fire_parraler,this->blocks,this->biases,std::cref(input),std::ref(output),min,max);
 
                 min = max;
                 
@@ -170,7 +218,7 @@ namespace snn
             //     }
             // }
 
-            Activation::activate(output);
+            // Activation::activate(output);
 
             return output;
         }
@@ -220,11 +268,11 @@ namespace snn
         int8_t load(std::istream& in)
         {
 
-            LayerKAC::metadata meta={0};
+            LayerHebbian::metadata meta={0};
 
-            in.read((char*)&meta,sizeof(LayerKAC::metadata));
+            in.read((char*)&meta,sizeof(LayerHebbian::metadata));
 
-            if( meta.id != LayerKAC::LAYER_KAC_ID || meta.input_size != inputSize || meta.node_size != N || meta.population_size != Populus )
+            if( meta.id != LayerHebbian::LAYER_HEBBIAN_ID || meta.input_size != inputSize || meta.node_size != N )
             {
                 return -3;
             }
@@ -233,7 +281,7 @@ namespace snn
             {
                 if(in.good())
                 {
-                    this->blocks[i].load(in);
+                    // to do
                 }
                 else
                 {
@@ -247,20 +295,19 @@ namespace snn
         int8_t save(std::ostream& out) const
         {
 
-            LayerKAC::metadata meta = {
-                .id = LayerKAC::LAYER_KAC_ID,
+            LayerHebbian::metadata meta = {
+                .id = LayerHebbian::LAYER_HEBBIAN_ID,
                 .input_size = inputSize,
-                .node_size = N,
-                .population_size = Populus
+                .node_size = N
             };
 
-            out.write((char*)&meta,sizeof(LayerKAC::metadata));
+            out.write((char*)&meta,sizeof(LayerHebbian::metadata));
             
             for(size_t i=0;i<N;++i)
             {
                 if(out.good())
                 {
-                    this->blocks[i].dump(out);
+                    // to do
                 }
                 else
                 {
@@ -271,9 +318,9 @@ namespace snn
             return 0;
         }        
 
-        ~LayerKAC()
+        ~LayerHebbian()
         {
-            delete [] this->blocks;
+
         }
 
     };  

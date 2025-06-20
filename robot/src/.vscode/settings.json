@@ -11,5 +11,6 @@
     "files.associations": {
         "*.pl": "prolog",
         "functional": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "/app/src/workspace/sim_build/modus_board_interfaces/modus_board_interfaces__py"
 }
