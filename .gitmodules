@@ -7,3 +7,6 @@
 [submodule "robot/src/workspace/src/kapibara"]
 	path = robot/src/workspace/src/kapibara
 	url = git@github.com:ProjectRobal/KapiBaraROSPackage.git
+[submodule "robot/src/workspace/src/kapibara_mind"]
+	path = robot/src/workspace/src/kapibara_mind
+	url = git@github.com:ProjectRobal/KapiBara_Control_Network_ROS2.git
