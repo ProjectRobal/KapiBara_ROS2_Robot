@@ -78,10 +78,15 @@ class EmotionEstimator(Node):
         self.declare_parameter('angular_threshold', 1.0)
         
         # models paths
-        self.declare_parameter('midas_model', 'Midas-V2-Quantized_edgetpu.tflite')
-        self.declare_parameter('deepid_model', 'deepid_edgetpu.tflite')
-        self.declare_parameter('face_model', 'slim_edgetpu.tflite')
-        self.declare_parameter('audio_model', 'model_edgetpu.tflite')
+        # self.declare_parameter('midas_model', 'Midas-V2-Quantized_edgetpu.tflite')
+        # self.declare_parameter('deepid_model', 'deepid_edgetpu.tflite')
+        # self.declare_parameter('face_model', 'slim_edgetpu.tflite')
+        # self.declare_parameter('audio_model', 'model_edgetpu.tflite')
+        
+        self.declare_parameter('midas_model', 'Midas-V2-Quantized.tflite')
+        self.declare_parameter('deepid_model', 'deepid.tflite')
+        self.declare_parameter('face_model', 'slim.tflite')
+        self.declare_parameter('audio_model', 'model.tflite')
         
         # a topic to send ears position
         
@@ -829,9 +834,11 @@ class EmotionEstimator(Node):
     def imu_callback(self,imu:Imu):
         accel=imu.linear_acceleration
         
-        accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 1.0)
+        accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 9.81)
         
-        if accel_value > 0.25:
+        self.get_logger().info("{}".format(accel_value))
+        
+        if accel_value > 0.5:
             self.get_logger().info("Pain occured!")
             
             self._emotions_lock.acquire()
