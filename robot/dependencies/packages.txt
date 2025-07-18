@@ -1,6 +1,7 @@
 python3-pip
 python3-colcon-common-extensions
 python3-rosdep
+python3-numpy
 libfftw3-dev
 ros-humble-rmw-cyclonedds-cpp
 ros-humble-rviz2

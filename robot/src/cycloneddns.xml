@@ -4,7 +4,7 @@
         <General>
             <AllowMulticast>true</AllowMulticast>
             <Interfaces>
-                <NetworkInterface name="ztosim4erz" />
+                <NetworkInterface name="wlp2s0" />
             </Interfaces>
         </General>      
         <Discovery>
