@@ -2,20 +2,151 @@
 
 #include <cmath>
 #include <cstdint>
+#include <variant>
+#include <functional>
 
 #include "config.hpp"
 
 namespace snn
 {
 
-#define VEC_COUNT (static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)+1)
+#define VEC_COUNT (static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE))
+
+#define VEC_REMAINDER (static_cast<size_t>(Size - VEC_COUNT*MAX_SIMD_VECTOR_SIZE))
 
 template<size_t Size>
 class SIMDVectorLite
 {
 private:
+
+    struct Empty
+    {};
+
     /* data */
     SIMD _vec[VEC_COUNT];
+
+    using remainder_simd = std::experimental::fixed_size_simd<number , VEC_REMAINDER >;
+
+    using remainder_simd_mask = std::experimental::fixed_size_simd_mask<number , VEC_REMAINDER >;
+
+    using remainder_type = std::conditional_t< VEC_REMAINDER != 0, remainder_simd ,Empty >;
+
+    using remainder_type_mask =  std::conditional_t< VEC_REMAINDER != 0, remainder_simd_mask ,Empty >;
+
+    using simd_ref_variant = std::variant<std::reference_wrapper<SIMD_ref>,std::reference_wrapper<typename remainder_simd::reference>>;
+
+    using simd_variant = std::conditional_t<
+        VEC_REMAINDER != 0,
+        // The variant when there IS a remainder
+        std::variant<
+            std::reference_wrapper<SIMD>,
+            std::reference_wrapper<remainder_simd>
+        >,
+        // The variant when there is NO remainder
+        std::variant<
+            std::reference_wrapper<SIMD>
+        >
+    >;
+
+    using simd_variant_ref = std::conditional_t<
+            VEC_REMAINDER != 0,
+            // Variant for a vector with a remainder (two alternatives)
+            std::variant<
+                SIMD::reference,
+                typename remainder_simd::reference
+            >,
+            // Variant for a vector with no remainder (one alternative)
+            std::variant<
+                SIMD::reference
+            >
+        >;
+
+
+    remainder_type remainder;
+
+    class SIMD_reference
+    {
+        private:
+
+        size_t index;
+
+        SIMD* _simd;
+        remainder_type* _remainder;
+
+        public:
+
+        SIMD_reference(SIMD* _simd,size_t index)
+        {
+            this->index = index;
+
+            this->_simd = _simd;
+            this->_remainder = nullptr;
+        }
+
+        SIMD_reference(remainder_type* _remainder,size_t index)
+        {
+            this->index = index;
+
+            this->_remainder = _remainder;
+            this->_simd = nullptr;
+        }
+
+        operator number() const
+        {
+            if constexpr(VEC_REMAINDER != 0)
+            {
+                if( this->_simd )
+                {
+                    return (*this->_simd)[this->index];
+                }
+                else
+                {
+                    return (*this->_remainder)[this->index];   
+                }
+            }
+
+            return (*this->_simd)[this->index];
+        }
+
+        number operator()() const
+        {
+            if constexpr(VEC_REMAINDER != 0)
+            {
+                if( this->_simd )
+                {
+                    return (*this->_simd)[this->index];
+                }
+                else
+                {
+                    return (*this->_remainder)[this->index];   
+                }
+            }
+
+            return (*this->_simd)[this->index];
+        }
+
+        void operator=(number n)
+        {
+            if constexpr(VEC_REMAINDER != 0)
+            {
+                if( this->_simd )
+                {
+                    (*this->_simd)[this->index] = n;
+                }
+                else
+                {
+                    (*this->_remainder)[this->index] = n;   
+                }
+            }
+            else
+            {
+
+                (*this->_simd)[this->index] = n;
+
+            }
+        }
+
+    };
 
     void zeros_last_element(size_t count)
     {
@@ -38,6 +169,22 @@ private:
         return output;
     }
 
+    remainder_type mask_to_remainder(const remainder_type_mask& mask) const
+    {
+
+        remainder_type output(0);
+
+        for(uint16_t i = 0; i< MAX_SIMD_VECTOR_SIZE; ++i)
+        {
+            output[i] = mask[i] ? 1.f : 0.f;
+
+        }
+
+        return output;
+
+    }
+
+
 public:
     SIMDVectorLite();
 
@@ -45,11 +192,15 @@ public:
 
     SIMDVectorLite(const std::array<number,Size>& arr);
 
+    // SIMDVectorLite(const SIMDVectorLite& vec);
+
+    // SIMDVectorLite(SIMDVectorLite&& vec);
+
     number reduce() const;
 
     number operator[](size_t i) const;
 
-    SIMD::reference operator[](size_t i);
+    SIMD_reference operator[](size_t i);
 
     template<size_t OutputSize>
     SIMDVectorLite<OutputSize> split();
@@ -61,9 +212,31 @@ public:
 
     void set(size_t i,number v);
 
-    void set_block(size_t i,const SIMD& block)
+    void set_block(size_t i,simd_variant block)
     {
+        if constexpr(VEC_REMAINDER != 0)
+        {
+
+            if( i == VEC_COUNT )
+            {
+                if( block.index() != 1 )
+                {
+                    return;
+                }
+                
+                this->remainder = block;
+                return;
+            }
+
+        }
+
+
         if(i>=VEC_COUNT)
+        {
+            return;
+        }
+
+        if( block.index() != 0 )
         {
             return;
         }
@@ -71,15 +244,24 @@ public:
         this->_vec[i] = block;
     }
 
-    SIMD& get_block(size_t i)
-    {
+    simd_variant get_block(size_t i)
+    {        
+        if( i == VEC_COUNT )
+        {
+            return std::ref(this->remainder);
+        }
+
         if(i>=VEC_COUNT)
         {
             i = 0;
         }
-
-        return this->_vec[i];
+        
+        return std::ref(this->_vec[i]);
     }
+
+    // void operator=(const SIMDVectorLite& vec);
+
+    // void operator=(SIMDVectorLite&& vec);
 
     void operator+=(number v);
 
@@ -144,28 +326,57 @@ SIMDVectorLite<Size>::SIMDVectorLite()
     {
         simd = SIMD(0);
     }
+
+    if constexpr(VEC_REMAINDER != 0)
+    {
+        this->remainder = remainder_type(0);
+    }
 }
+
+
+// template<size_t Size>
+// SIMDVectorLite<Size>::SIMDVectorLite(const SIMDVectorLite& vec)
+// {
+//     for(size_t i=0;i<VEC_COUNT;++i)
+//     {
+//         this->_vec[i] = vec._vec[i];
+//     }
+
+//     if constexpr(VEC_REMAINDER != 0)
+//     {
+//         this->remainder = vec.remainder;
+//     }
+// }
+
+
+// template<size_t Size>
+// SIMDVectorLite<Size>::SIMDVectorLite(SIMDVectorLite&& vec)
+// {
+//     for(size_t i=0;i<VEC_COUNT;++i)
+//     {
+//         this->_vec[i] = std::move(vec._vec[i]);
+//     }
+
+//     if constexpr(VEC_REMAINDER != 0)
+//     {
+//         this->remainder = std::move(vec.remainder);
+//     }
+// }
 
 template<size_t Size>
 SIMDVectorLite<Size>::SIMDVectorLite(number num)
 {
-    constexpr size_t element_left = Size - static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE ;
-
-    size_t to_set = VEC_COUNT;
-
     
-    for(size_t i=0;i<to_set;++i)
+    for(size_t i=0;i<VEC_COUNT;++i)
     {
         this->_vec[i] = SIMD(num);
     }
 
-    to_set -=1 ;
-
-    this->_vec[to_set] = SIMD(0);
-
-    for(size_t i=0;i<element_left;++i)
+    if constexpr(VEC_REMAINDER != 0)
     {
-        this->_vec[to_set][i] = num;
+
+        this->remainder = remainder_type(num);
+
     }
 
 }
@@ -178,6 +389,34 @@ SIMDVectorLite<Size>::SIMDVectorLite(const std::array<number,Size>& arr)
         this->set(i,arr[i]);
     }
 }
+
+// template<size_t Size>
+// void SIMDVectorLite<Size>::operator=(const SIMDVectorLite& vec)
+// {
+//     for(size_t i=0;i<VEC_COUNT;++i)
+//     {
+//         this->_vec[i] = vec._vec[i];
+//     }
+
+//     if constexpr(VEC_REMAINDER != 0)
+//     {
+//         this->remainder = vec.remainder;
+//     }
+// }
+
+// template<size_t Size>
+// void SIMDVectorLite<Size>::operator=(SIMDVectorLite&& vec)
+// {
+//     for(size_t i=0;i<VEC_COUNT;++i)
+//     {
+//         this->_vec[i] = std::move(vec._vec[i]);
+//     }
+
+//     if constexpr(VEC_REMAINDER != 0)
+//     {
+//         this->remainder = std::move(vec.remainder);
+//     }
+// }
 
 template<size_t Size>
 template<size_t OutputSize>
@@ -217,6 +456,11 @@ number SIMDVectorLite<Size>:: reduce() const
         output+=std::experimental::reduce(simd);
     }
 
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output += std::experimental::reduce(this->remainder);
+    }
+
     return output;
 }
 
@@ -228,22 +472,47 @@ number SIMDVectorLite<Size>::operator[](size_t i) const
         i = 0;
     }
 
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        if( i >= VEC_COUNT*MAX_SIMD_VECTOR_SIZE )
+        {
+            i = i  - static_cast<size_t>(i/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE;
+
+            return this->remainder[i];
+        }
+    }
+
     size_t simd_id = i/MAX_SIMD_VECTOR_SIZE;
 
     return _vec[simd_id][i - simd_id*MAX_SIMD_VECTOR_SIZE];
 }
 
 template<size_t Size>
-SIMD::reference SIMDVectorLite<Size>::operator[](size_t i)
+SIMDVectorLite<Size>::SIMD_reference SIMDVectorLite<Size>::operator[](size_t i)
 {
     if(i>=Size)
     {
         i = 0;
     }
 
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        if( i >= VEC_COUNT*MAX_SIMD_VECTOR_SIZE )
+        {
+            i = i  - static_cast<size_t>(i/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE;
+
+            return SIMD_reference(&this->remainder,i);
+        }
+    }
+
     size_t simd_id = i/MAX_SIMD_VECTOR_SIZE;
 
-    return _vec[simd_id][i - simd_id*MAX_SIMD_VECTOR_SIZE];
+    // number& ref = _vec[simd_id][i - simd_id*MAX_SIMD_VECTOR_SIZE];
+
+    // return _vec[simd_id][i - simd_id*MAX_SIMD_VECTOR_SIZE];
+
+    return SIMD_reference(&_vec[simd_id],i - simd_id*MAX_SIMD_VECTOR_SIZE);
 }
 
 template<size_t Size>
@@ -254,6 +523,16 @@ void SIMDVectorLite<Size>::set(size_t i,number v)
         return;
     }
 
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        if( i > VEC_COUNT*MAX_SIMD_VECTOR_SIZE )
+        {
+            i = i  - static_cast<size_t>(i/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE;
+
+            this->remainder[i] = v;
+        }
+    }
+
     size_t simd_id = i/MAX_SIMD_VECTOR_SIZE;
 
     _vec[simd_id][i - simd_id*MAX_SIMD_VECTOR_SIZE] = v;
@@ -262,28 +541,33 @@ void SIMDVectorLite<Size>::set(size_t i,number v)
 template<size_t Size>
 void SIMDVectorLite<Size>::operator+=(number v)
 {
-    constexpr size_t element_left = Size - static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE - 1;
     
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         this->_vec[i] += v;
     }
 
-    this->zeros_last_element(MAX_SIMD_VECTOR_SIZE-element_left);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder += v;
+    }
 
 }
 
 template<size_t Size>
 void SIMDVectorLite<Size>::operator-=(number v)
 {
-    constexpr size_t element_left = Size - static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE - 1;
     
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         this->_vec[i] -= v;
     }
 
-    this->zeros_last_element(MAX_SIMD_VECTOR_SIZE-element_left);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder -= v;
+    }
+    
 }
 
 template<size_t Size>
@@ -292,6 +576,11 @@ void SIMDVectorLite<Size>::operator*=(number v)
     for(SIMD& simd : this->_vec)
     {
         simd*=v;
+    }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder *= v;
     }
 }
 
@@ -307,21 +596,27 @@ void SIMDVectorLite<Size>::operator/=(number v)
     {
         simd/=v;
     }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder /= v;
+    }
 }
 
 template<size_t Size>
 SIMDVectorLite<Size> SIMDVectorLite<Size>::operator+(number v) const
 {
     SIMDVectorLite<Size> output;
-
-    constexpr size_t element_left = Size - static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE - 1;
     
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         output._vec[i] = this->_vec[i] + v;
     }
 
-    output.zeros_last_element(MAX_SIMD_VECTOR_SIZE-element_left);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder + v;
+    }
 
     return output;
 
@@ -331,15 +626,16 @@ template<size_t Size>
 SIMDVectorLite<Size> SIMDVectorLite<Size>::operator-(number v) const
 {
     SIMDVectorLite<Size> output;
-
-    constexpr size_t element_left = Size - static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE - 1; 
     
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         output._vec[i] = this->_vec[i] - v;
     }
 
-    output.zeros_last_element(MAX_SIMD_VECTOR_SIZE-element_left);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder - v;
+    }
 
     return output;
 }
@@ -354,6 +650,11 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator*(number v) const
         output._vec[i] = this->_vec[i] * v;
     }
 
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder * v;
+    }
+
     return output;
 
 }
@@ -361,16 +662,17 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator*(number v) const
 template<size_t Size>
 SIMDVectorLite<Size> SIMDVectorLite<Size>::operator/(number v) const
 {
-    if( v == 0)
-    {
-        v+= 0.000000000000001f;
-    }
 
     SIMDVectorLite<Size> output;
     
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         output._vec[i] = this->_vec[i] / v;
+    }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder / v;
     }
 
     return output;
@@ -384,6 +686,11 @@ void SIMDVectorLite<Size>::operator+=(const SIMDVectorLite<Size>& v)
     {
         this->_vec[i] += v._vec[i];
     }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder += v.remainder;
+    }
 }
 
 template<size_t Size>
@@ -392,6 +699,11 @@ void SIMDVectorLite<Size>::operator-=(const SIMDVectorLite<Size>& v)
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         this->_vec[i] -= v._vec[i];
+    }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder -= v.remainder;
     }
 }
 
@@ -402,6 +714,11 @@ void SIMDVectorLite<Size>::operator*=(const SIMDVectorLite<Size>& v)
     {
         this->_vec[i] *= v._vec[i];
     }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder *= v.remainder;
+    }
 }
 
 template<size_t Size>
@@ -409,7 +726,12 @@ void SIMDVectorLite<Size>::operator/=(const SIMDVectorLite<Size>& v)
 {
     for(size_t i=0;i<VEC_COUNT;++i)
     {
-        this->_vec[i] /= ( v._vec[i] + 0.000000000000000001f);
+        this->_vec[i] /= v._vec[i];
+    }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        this->remainder /= v.remainder;
     }
 }
 
@@ -421,6 +743,11 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator+(const SIMDVectorLite<Size>&
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         output._vec[i] = this->_vec[i] + v._vec[i];
+    }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder + v.remainder;
     }
 
     return output;
@@ -436,6 +763,11 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator-(const SIMDVectorLite<Size>&
         output._vec[i] = this->_vec[i] - v._vec[i];
     }
 
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder - v.remainder;
+    }
+
     return output;
 }
 
@@ -449,6 +781,11 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator*(const SIMDVectorLite<Size>&
         output._vec[i] = this->_vec[i] * v._vec[i];
     }
 
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder * v.remainder;
+    }
+
     return output;
 }
 
@@ -459,7 +796,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator/(const SIMDVectorLite<Size>&
     
     for(size_t i=0;i<VEC_COUNT;++i)
     {
-        output._vec[i] = this->_vec[i] / ( v._vec[i] +  0.000000000000000001f);
+        output._vec[i] = this->_vec[i] / v._vec[i];
+    }
+
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+        output.remainder = this->remainder / v.remainder;
     }
 
     return output;
@@ -477,7 +819,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator==(const SIMDVectorLite<Size>
         output._vec[i] = this->mask_to_simd(this->_vec[i] == v._vec[i]);
     }
 
-    output.zeros_last_element(VEC_COUNT*MAX_SIMD_VECTOR_SIZE - Size);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = this->mask_to_remainder(this->remainder == v.remainder);
+
+    }
 
     return output;
 }
@@ -492,7 +839,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator!=(const SIMDVectorLite<Size>
         output._vec[i] = this->mask_to_simd(this->_vec[i] != v._vec[i]);
     }
 
-    output.zeros_last_element(VEC_COUNT*MAX_SIMD_VECTOR_SIZE - Size);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = this->mask_to_remainder(this->remainder != v.remainder);
+
+    }
 
     return output;
 
@@ -508,7 +860,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator>=(const SIMDVectorLite<Size>
         output._vec[i] = this->mask_to_simd(this->_vec[i] >= v._vec[i]);
     }
 
-    output.zeros_last_element(VEC_COUNT*MAX_SIMD_VECTOR_SIZE - Size);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = this->mask_to_remainder(this->remainder >= v.remainder);
+
+    }
 
     return output;
 }
@@ -523,7 +880,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator<=(const SIMDVectorLite<Size>
         output._vec[i] = this->mask_to_simd(this->_vec[i] <= v._vec[i]);
     }
 
-    output.zeros_last_element(VEC_COUNT*MAX_SIMD_VECTOR_SIZE - Size);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = this->mask_to_remainder(this->remainder <= v.remainder);
+
+    }
 
     return output;
 }
@@ -538,7 +900,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator>(const SIMDVectorLite<Size>&
         output._vec[i] = this->mask_to_simd(this->_vec[i] > v._vec[i]);
     }
 
-    output.zeros_last_element(VEC_COUNT*MAX_SIMD_VECTOR_SIZE - Size);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = this->mask_to_remainder(this->remainder > v.remainder);
+
+    }
 
     return output;
 }
@@ -553,7 +920,12 @@ SIMDVectorLite<Size> SIMDVectorLite<Size>::operator<(const SIMDVectorLite<Size>&
         output._vec[i] = this->mask_to_simd(this->_vec[i] < v._vec[i]);
     }
 
-    output.zeros_last_element(VEC_COUNT*MAX_SIMD_VECTOR_SIZE - Size);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = this->mask_to_remainder(this->remainder < v.remainder);
+
+    }
 
     return output;
 }
@@ -569,14 +941,17 @@ snn::SIMDVectorLite<Size> snn::SIMDVectorLite<Size>::exp()
 
     snn::SIMDVectorLite<Size> output(0.f);
 
-    constexpr size_t element_left = Size - static_cast<size_t>(Size/MAX_SIMD_VECTOR_SIZE)*MAX_SIMD_VECTOR_SIZE - 1;
-
     for(size_t i=0;i<VEC_COUNT;++i)
     {
         output._vec[i] = std::experimental::exp(this->_vec[i]);
     }
 
-    output.zeros_last_element(MAX_SIMD_VECTOR_SIZE-element_left);
+    if constexpr( VEC_REMAINDER != 0 )
+    {
+
+        output.remainder = std::experimental::exp(this->remainder);
+
+    }
 
     return output;
 }

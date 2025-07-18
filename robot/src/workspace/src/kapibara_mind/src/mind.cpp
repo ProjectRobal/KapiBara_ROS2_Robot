@@ -37,6 +37,8 @@
 // spectogram
 #include <sensor_msgs/msg/image.hpp>
 
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
 // twist message used for ros2 control
 #include <geometry_msgs/msg/twist.hpp>
 
@@ -109,20 +111,22 @@ using namespace std::chrono_literals;
 
 // Behavioral map size
 
-#define MAP_WIDTH (1024)
+#define MAP_WIDTH (8192)
 
-#define MAP_HEIGHT (1024)
+#define MAP_HEIGHT (8192)
 
 #define MAP_SIZE MAP_WIDTH*MAP_HEIGHT
 
 class KapiBaraMind : public rclcpp::Node
 {
    
-    snn::SIMDVectorLite<MAP_WIDTH*MAP_HEIGHT> map;
+    number map[MAP_WIDTH*MAP_HEIGHT];
 
-    snn::SIMDVectorLite<3> position;
+    number position[3];
 
-    snn::SIMDVectorLite<4> orientation;
+    number orientation[4];
+
+    float yaw;
 
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
@@ -149,6 +153,11 @@ class KapiBaraMind : public rclcpp::Node
 
     void set_map_at(size_t x,size_t y,number value)
     {
+        // center the coordinates
+
+        x += (MAP_WIDTH/2);
+        y += (MAP_HEIGHT/2);
+
         size_t offset = MAP_WIDTH*y + x;
 
         if( offset >= MAP_SIZE )
@@ -161,6 +170,11 @@ class KapiBaraMind : public rclcpp::Node
 
     number get_map_at(size_t x,size_t y)
     {
+        // center the coordinates
+
+        x += (MAP_WIDTH/2);
+        y += (MAP_HEIGHT/2);
+
         size_t offset = MAP_WIDTH*y + x;
 
         if( offset >= MAP_SIZE )
@@ -220,10 +234,25 @@ class KapiBaraMind : public rclcpp::Node
         this->position[1] = static_cast<number>(pose.position.y);
         this->position[2] = static_cast<number>(pose.position.z);
 
-        this->orientation[0] = static_cast<number>(pose.orientation.x);
-        this->orientation[1] = static_cast<number>(pose.orientation.y);
-        this->orientation[2] = static_cast<number>(pose.orientation.z);
-        this->orientation[3] = static_cast<number>(pose.orientation.w);
+
+        tf2::Quaternion quat;
+
+        tf2::fromMsg(pose.orientation, quat);
+
+        // raw, pitch, yaw
+        double r,p,y;
+
+        tf2::Matrix3x3 m(quat);
+
+        m.getRPY(r,p,y);
+
+        this->yaw = y;
+
+        RCLCPP_INFO(this->get_logger(),"Robot coordinates: %f, %f,%f yaw: %f",
+        pose.position.x,pose.position.y,pose.position.z,this->yaw);
+
+        RCLCPP_INFO(this->get_logger(),"Robot coordinates 1: %f, %f,%f yaw: %f",
+        this->position[0],this->position[1],this->position[2],this->yaw);
 
         // append orientaion data
 
