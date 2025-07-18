@@ -105,34 +105,25 @@ using namespace std::chrono_literals;
 
 #define MAX_ANGULAR_SPEED (400.f)
 
-#define POPULATION_SIZE (80)
 
-#define ACTION_COUNT (20)
+
+// Behavioral map size
+
+#define MAP_WIDTH (1024)
+
+#define MAP_HEIGHT (1024)
+
+#define MAP_SIZE MAP_WIDTH*MAP_HEIGHT
 
 class KapiBaraMind : public rclcpp::Node
 {
-    std::random_device rd;
-    std::mt19937 gen; // Standard mersenne_twister_engine seeded with rd()
-    
+   
+    snn::SIMDVectorLite<MAP_WIDTH*MAP_HEIGHT> map;
 
-    snn::Arbiter arbiter;
+    snn::SIMDVectorLite<3> position;
 
-    size_t max_iter;
+    snn::SIMDVectorLite<4> orientation;
 
-    std::shared_ptr<snn::Attention<686,ACTION_COUNT,POPULATION_SIZE>> attention;
-
-    std::shared_ptr<snn::LayerKAC<686,4096,POPULATION_SIZE>> layer1;
-
-    std::shared_ptr<snn::LayerKAC<4096,2048,POPULATION_SIZE,snn::ReLu>> layer2;
-
-    std::shared_ptr<snn::LayerKAC<2048,512,POPULATION_SIZE,snn::ReLu>> layer3;
-
-    std::shared_ptr<snn::LayerKAC<512,256,POPULATION_SIZE,snn::ReLu>> layer4;
-
-    std::shared_ptr<snn::LayerKAC<256,64,POPULATION_SIZE>> layer5;
-
-
-    snn::SIMDVectorLite<686> inputs;
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
 
@@ -153,9 +144,32 @@ class KapiBaraMind : public rclcpp::Node
 
     rclcpp::TimerBase::SharedPtr network_timer;
 
-    rclcpp::TimerBase::SharedPtr network_save_timer;
 
     long double last_reward;
+
+    void set_map_at(size_t x,size_t y,number value)
+    {
+        size_t offset = MAP_WIDTH*y + x;
+
+        if( offset >= MAP_SIZE )
+        {
+            return;
+        }
+
+        this->map[ offset ] = value;
+    }
+
+    number get_map_at(size_t x,size_t y)
+    {
+        size_t offset = MAP_WIDTH*y + x;
+
+        if( offset >= MAP_SIZE )
+        {
+            return std::nan("1");
+        }
+
+        return this->map[offset];
+    }
 
     void stop_mind_handle(const std::shared_ptr<kapibara_interfaces::srv::StopMind::Request> request,
         std::shared_ptr<kapibara_interfaces::srv::StopMind::Response> response)
@@ -176,58 +190,6 @@ class KapiBaraMind : public rclcpp::Node
         response->ok = true;
     }
 
-
-    void init_network()
-    {
-        this->attention = std::make_shared<snn::Attention<686,ACTION_COUNT,POPULATION_SIZE>>();
-
-        this->layer1 = std::make_shared<snn::LayerKAC<686,4096,POPULATION_SIZE>>();
-        this->layer2 = std::make_shared<snn::LayerKAC<4096,2048,POPULATION_SIZE,snn::ReLu>>();
-        this->layer3 = std::make_shared<snn::LayerKAC<2048,512,POPULATION_SIZE,snn::ReLu>>();
-        this->layer4 = std::make_shared<snn::LayerKAC<512,256,POPULATION_SIZE,snn::ReLu>>();
-        this->layer5 = std::make_shared<snn::LayerKAC<256,64,POPULATION_SIZE>>();
-
-        this->arbiter.addLayer(this->attention);
-
-        this->arbiter.addLayer(this->layer1);
-        this->arbiter.addLayer(this->layer2);
-        this->arbiter.addLayer(this->layer3);
-        this->arbiter.addLayer(this->layer4);
-        this->arbiter.addLayer(this->layer5);
-
-        int ret = this->arbiter.load(this->checkpoint_filename());
-
-        if(ret!=0)
-        {
-            RCLCPP_ERROR(this->get_logger(),"Failed to load network! with code: %i trying to load backup!",ret);
-
-            ret = this->arbiter.load_backup(this->checkpoint_filename());
-        }
-
-        if(ret!=0)
-        {
-            RCLCPP_ERROR(this->get_logger(),"Failed to load network! with code: %i !",ret);
-            this->arbiter.setup();
-
-            ret = arbiter.save(this->checkpoint_filename());
-
-            if(ret!=0)
-            {
-                RCLCPP_ERROR(this->get_logger(),"Failed to save network, error code: %i to %s",ret,this->checkpoint_filename().c_str());
-            }
-            else
-            {
-                RCLCPP_INFO(this->get_logger(),"Network has been saved!");
-            }
-
-        }
-        else 
-        {
-            RCLCPP_INFO(this->get_logger(),"Networkd loaded from file: %s",this->checkpoint_filename().c_str());
-        }
-
-    }
-
     const std::string checkpoint_filename() const
     {
         return this->get_parameter("checkpoint_dir").as_string();
@@ -239,10 +201,10 @@ class KapiBaraMind : public rclcpp::Node
 
         // append orientaion data
 
-        this->inputs[0] = static_cast<number>(imu->orientation.x);
-        this->inputs[1] = static_cast<number>(imu->orientation.y);
-        this->inputs[2] = static_cast<number>(imu->orientation.z);
-        this->inputs[3] = static_cast<number>(imu->orientation.w);
+        // this->inputs[0] = static_cast<number>(imu->orientation.x);
+        // this->inputs[1] = static_cast<number>(imu->orientation.y);
+        // this->inputs[2] = static_cast<number>(imu->orientation.z);
+        // this->inputs[3] = static_cast<number>(imu->orientation.w);
 
     }
 
@@ -250,17 +212,28 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Got odometry message!");
 
-        const auto& twist = odom->twist.twist;
+        // const auto& twist = odom->twist.twist;
+
+        const auto& pose = odom->pose.pose;
+
+        this->position[0] = static_cast<number>(pose.position.x);
+        this->position[1] = static_cast<number>(pose.position.y);
+        this->position[2] = static_cast<number>(pose.position.z);
+
+        this->orientation[0] = static_cast<number>(pose.orientation.x);
+        this->orientation[1] = static_cast<number>(pose.orientation.y);
+        this->orientation[2] = static_cast<number>(pose.orientation.z);
+        this->orientation[3] = static_cast<number>(pose.orientation.w);
 
         // append orientaion data
 
-        this->inputs[4] = static_cast<number>(twist.linear.x/MAX_LINEAR_SPEED);
-        this->inputs[5] = static_cast<number>(twist.linear.y/MAX_LINEAR_SPEED);
-        this->inputs[6] = static_cast<number>(twist.linear.z/MAX_LINEAR_SPEED);
+        // this->inputs[4] = static_cast<number>(twist.linear.x/MAX_LINEAR_SPEED);
+        // this->inputs[5] = static_cast<number>(twist.linear.y/MAX_LINEAR_SPEED);
+        // this->inputs[6] = static_cast<number>(twist.linear.z/MAX_LINEAR_SPEED);
 
-        this->inputs[7] = static_cast<number>(twist.angular.x/MAX_ANGULAR_SPEED);
-        this->inputs[8] = static_cast<number>(twist.angular.y/MAX_ANGULAR_SPEED);
-        this->inputs[9] = static_cast<number>(twist.angular.z/MAX_ANGULAR_SPEED);
+        // this->inputs[7] = static_cast<number>(twist.angular.x/MAX_ANGULAR_SPEED);
+        // this->inputs[8] = static_cast<number>(twist.angular.y/MAX_ANGULAR_SPEED);
+        // this->inputs[9] = static_cast<number>(twist.angular.z/MAX_ANGULAR_SPEED);
 
     }
 
@@ -268,82 +241,82 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Got face embedding message!");
 
-        const std::vector<float>& embeddings = face->embedding;
+        // const std::vector<float>& embeddings = face->embedding;
 
-        size_t iter = 10;
+        // size_t iter = 10;
 
-        float max_value = *std::max_element(embeddings.begin(), embeddings.end());
+        // float max_value = *std::max_element(embeddings.begin(), embeddings.end());
 
-        float min_value = *std::min_element(embeddings.begin(), embeddings.end());
+        // float min_value = *std::min_element(embeddings.begin(), embeddings.end());
 
-        for(const float elem : embeddings)
-        {
+        // for(const float elem : embeddings)
+        // {
 
-            this->inputs[iter] = static_cast<number>((elem - min_value)/(max_value - min_value));
+        //     this->inputs[iter] = static_cast<number>((elem - min_value)/(max_value - min_value));
 
-            iter++;
-        }
+        //     iter++;
+        // }
     }
 
     void points_callback(const sensor_msgs::msg::PointCloud2::SharedPtr points)
     {
         RCLCPP_DEBUG(this->get_logger(),"Got points message!");
 
-        if( points->width*points->height != 256 )
-        {
-            RCLCPP_ERROR(this->get_logger(),"Got invalid points message!");
-            return;
-        }
+        // if( points->width*points->height != 256 )
+        // {
+        //     RCLCPP_ERROR(this->get_logger(),"Got invalid points message!");
+        //     return;
+        // }
 
-        bool found_z = false;
+        // bool found_z = false;
 
-        for( const auto& field : points->fields )
-        {
-            if( field.name == "z" )
-            {
-                found_z = true;
-            }
-        }
+        // for( const auto& field : points->fields )
+        // {
+        //     if( field.name == "z" )
+        //     {
+        //         found_z = true;
+        //     }
+        // }
 
-        if( !found_z || points->fields.size()!= 4 )
-        {
-            RCLCPP_ERROR(this->get_logger(),"No z field found or not enough fields present!");
-            return;
-        }
+        // if( !found_z || points->fields.size()!= 4 )
+        // {
+        //     RCLCPP_ERROR(this->get_logger(),"No z field found or not enough fields present!");
+        //     return;
+        // }
 
-        sensor_msgs::PointCloud2Iterator<float> iter_z(*points, "z");
+        // sensor_msgs::PointCloud2Iterator<float> iter_z(*points, "z");
 
-        float num = 0.f;
+        // float num = 0.f;
 
-        snn::SIMDVectorLite<256> z_points;
+        // snn::SIMDVectorLite<256> z_points;
 
-        size_t iter = 0;
+        // size_t iter = 0;
 
-        float min = 0;
-        float max = 0;
+        // float min = 0;
+        // float max = 0;
 
-        while( iter_z != iter_z.end() )
-        {
-            num = *iter_z;
+        // while( iter_z != iter_z.end() )
+        // {
+        //     num = *iter_z;
 
-            num = std::min(num,10.f);
-            num = std::max(num,-10.f);
+        //     num = std::min(num,10.f);
+        //     num = std::max(num,-10.f);
 
-            z_points[iter] = num;
+        //     z_points[iter] = num;
 
-            min = min == 0 ? num : std::min(min,num);
+        //     min = min == 0 ? num : std::min(min,num);
 
-            max = max == 0 ? num : std::max(max,num);
+        //     max = max == 0 ? num : std::max(max,num);
 
-            ++iter_z;
-        }
+        //     ++iter_z;
+        // }
 
-        z_points = (z_points-min)/(max-min);
+        // z_points = (z_points-min)/(max-min);
 
-        for(size_t i=0;i<256;i++)
-        {
-            this->inputs[i+170] = z_points[i];
-        }
+        // for(size_t i=0;i<256;i++)
+        // {
+        //     this->inputs[i+170] = z_points[i];
+        // }
         
     }
 
@@ -371,13 +344,13 @@ class KapiBaraMind : public rclcpp::Node
 
         size_t iter = 426;
 
-        for(size_t y=0;y<16;y++)
-        {
-            for(size_t x=0;x<16;x++)
-            {
-                this->inputs[iter++] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
-            }
-        }
+        // for(size_t y=0;y<16;y++)
+        // {
+        //     for(size_t x=0;x<16;x++)
+        //     {
+        //         this->inputs[iter++] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
+        //     }
+        // }
     }
 
     void emotions_callback(const kapibara_interfaces::msg::Emotions::SharedPtr emotions)
@@ -386,134 +359,34 @@ class KapiBaraMind : public rclcpp::Node
 
         long double reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
 
-        this->arbiter.applyReward(reward);
-
-        this->arbiter.shuttle();
-
         this->last_reward = reward;
 
+        this->set_map_at(this->position[0],this->position[1],reward);
     }
 
     void network_callback()
     {
         RCLCPP_DEBUG(this->get_logger(),"Network fired!");
 
-        // there is no need to do anything when robot is happy
-        if( this->last_reward >= 0.f )
-        {
-
-            geometry_msgs::msg::Twist twist;
-
-            twist.angular.z = 0.f;
-
-            twist.linear.x = 0.f;
-
-            this->twist_publisher->publish(twist);
-            
-            return;
-        }
-
-        snn::SIMDVectorLite<64> output = this->fire_network(this->inputs);
-
-        for(size_t i=0;i<64;++i)
-        {
-            output[i] = std::exp(output[i]);
-        }
-
-        output = output / output.reduce();
-
-        std::uniform_real_distribution<float> dis(0.0, 1.0);
-
-        size_t max_iter = 0;
-
-        for(size_t i=1;i<64;++i)
-        {
-            if( output[i] > output[max_iter] )
-            {
-                max_iter = i;
-            }
-        }
-
-        // float random_value = dis(this->gen);
-
-        // float action_cumulator = 0.f;
-
-        // size_t max_iter = 0;
-
-        // for(size_t i=0;i<64;i++)
-        // {
-        //     action_cumulator += output[i];
-
-        //     if(action_cumulator >= random_value)
-        //     {
-        //         max_iter = i;
-        //         break;
-        //     }
-        // }
-
-        // decode x and y value
-
-        int8_t x = max_iter % 16;
-        int8_t y = max_iter / 16;
-
-        x -= 8;
-        y -= 8;
-
-        const double max_linear_speed = this->get_parameter("max_linear_speed").as_double();
-
-        const double max_angular_speed = this->get_parameter("max_angular_speed").as_double();
-
-        if(abs(x)<=3)
-        {
-            x = 0;
-        }
-
-        if(abs(y)<=3)
-        {
-            y = 0;
-        }
-
-        
-
-        double linear_speed = (static_cast<double>(y)/8.f)*max_linear_speed;
-
-        double angular_speed = (static_cast<double>(x)/8.f)*max_angular_speed;
-
-
-        geometry_msgs::msg::Twist twist;
-
-        twist.angular.z = angular_speed;
-
-        twist.linear.x = -linear_speed;
-
-        this->twist_publisher->publish(twist);
 
     }
 
-    void save_network_callback()
+    void init_map()
     {
-        this->stop_motors();
+        // we will load map from file but by default we will initialize it with random data
 
-        int8_t ret = this->save_network();
+        snn::GaussInit<0.f,1.f> gauss;
 
-        if( ret != 0 )
+        for(size_t i=0;i<MAP_SIZE;++i)
         {
-            RCLCPP_ERROR(this->get_logger(),"Got error id during network save: %i",(int32_t)ret);
+            this->map[i] = gauss.init();
         }
     }
 
     public:
 
-    int8_t save_network()
-    {
-        RCLCPP_INFO(this->get_logger(),"Saving network weights!");
-
-        return this->arbiter.save(this->checkpoint_filename());
-    }
-
     KapiBaraMind()
-    : Node("kapibara_mind"),
-    gen(rd())
+    : Node("kapibara_mind")
     {
 
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
@@ -524,11 +397,7 @@ class KapiBaraMind : public rclcpp::Node
 
         this->last_reward = 0.f;
 
-        this->max_iter = 0;
-
-        this->inputs = snn::SIMDVectorLite<686>(0);
-
-        this->init_network();
+        this->init_map();
 
         // add all required subscriptions
 
@@ -559,9 +428,7 @@ class KapiBaraMind : public rclcpp::Node
         this->twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("motors/cmd_vel_unstamped", 10);
 
         this->network_timer = this->create_wall_timer(100ms, std::bind(&KapiBaraMind::network_callback, this));
-
-        // save each 60min
-        this->network_save_timer= this->create_wall_timer(60min, std::bind(&KapiBaraMind::save_network_callback, this));
+        
     }
 
     void stop_motors()
@@ -575,25 +442,10 @@ class KapiBaraMind : public rclcpp::Node
         this->twist_publisher->publish(twist);
     }
 
-    snn::SIMDVectorLite<64> fire_network(const snn::SIMDVectorLite<686>& input)
-    {
-
-        auto output = this->attention->process(input);
-
-        auto output2 = this->layer1->fire(output);
-        auto output3 = this->layer2->fire(output2);
-        auto output4 = this->layer3->fire(output3);
-        auto output5 = this->layer4->fire(output4);
-        auto output6 = this->layer5->fire(output5);
-
-        return output6;
-    }
 
     void shutdown()
     {
         this->stop_motors();
-
-        this->save_network();
     }
 
     ~KapiBaraMind()
