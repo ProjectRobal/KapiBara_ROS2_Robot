@@ -83,10 +83,7 @@ class EmotionEstimator(Node):
         # self.declare_parameter('face_model', 'slim_edgetpu.tflite')
         # self.declare_parameter('audio_model', 'model_edgetpu.tflite')
         
-        self.declare_parameter('midas_model', 'Midas-V2-Quantized.tflite')
-        self.declare_parameter('deepid_model', 'deepid.tflite')
-        self.declare_parameter('face_model', 'slim.tflite')
-        self.declare_parameter('audio_model', 'model.tflite')
+        self.declare_parameter('sim',False)
         
         # a topic to send ears position
         
@@ -109,6 +106,12 @@ class EmotionEstimator(Node):
         
         # face database file
         self.declare_parameter('face_db', '/app/src/face')
+        
+        sim:bool = self.get_parameter('sim').get_parameter_value().bool_value
+        
+        midas_model:str = 'Midas-V2-Quantized_edgetpu.tflite' if not sim else 'Midas-V2-Quantized.tflite'
+        deepid_model:str = 'deepid_edgetpu.tflite' if not sim else 'deepid.tflite'
+        face_model:str = 'slim_edgetpu.tflite' if not sim else 'slim.tflite'
         
         # store 500 face embeddings + rewards
         self.embeddings_buffor = np.zeros((500,160),dtype=np.float32)
@@ -144,21 +147,20 @@ class EmotionEstimator(Node):
        
         self.emotion_publisher = self.create_publisher(Emotions,"emotions",10)
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('audio_model').get_parameter_value().string_value)
         
         self.bridge = CvBridge()
         
         # initialize model
         self.get_logger().info('Initializing MiDas2...')
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('midas_model').get_parameter_value().string_value)
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',midas_model)
         
         self.midas = midasDepthEstimator(model_path)
         
         self.get_logger().info('Model initialized!')
         
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('face_model').get_parameter_value().string_value)
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',face_model)
         
         self.get_logger().info('Initializing LiteFaceDetector...')
         
@@ -167,7 +169,7 @@ class EmotionEstimator(Node):
         self.get_logger().info('Model initialized!')
         
         
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('deepid_model').get_parameter_value().string_value)
+        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',deepid_model)
         
         self.get_logger().info('Initializing LiteFaceDetector...')
         
