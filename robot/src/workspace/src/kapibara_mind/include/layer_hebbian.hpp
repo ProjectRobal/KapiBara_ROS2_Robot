@@ -37,7 +37,7 @@
 */
 namespace snn
 {    
-    template<size_t inputSize,size_t N,class Activation = Linear,class weight_initializer = UniformInit<-0.01f,0.01f>>
+    template<size_t inputSize,size_t N,class Activation = Linear,class weight_initializer = UniformInit<(number)-0.01f,(number)0.01f>>
     class LayerHebbian : public Layer
     { 
         const uint32_t LAYER_HEBBIAN_ID = 2158;
@@ -112,7 +112,7 @@ namespace snn
 
         void applyLearning(const snn::SIMDVectorLite<N>& post_activations,const snn::SIMDVectorLite<inputSize>& pre_activations)
         {
-            UniformInit<0.f,1.f> uniform;
+            UniformInit<(number)0.f,(number)1.f> uniform;
 
             for(size_t i=0;i<N;++i)
             {

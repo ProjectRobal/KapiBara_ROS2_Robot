@@ -36,7 +36,7 @@
 */
 namespace snn
 {    
-    template<size_t inputSize,size_t N,size_t Populus,class Activation = Linear,class weight_initializer = GaussInit<0.f,0.01f>>
+    template<size_t inputSize,size_t N,size_t Populus,class Activation = Linear,class weight_initializer = GaussInit<(number)0.f,(number)0.01f>>
     class LayerKAC : public Layer
     { 
         const uint32_t LAYER_KAC_ID = 2148;
