@@ -117,6 +117,8 @@ using namespace std::chrono_literals;
 
 #define MAP_SIZE MAP_WIDTH*MAP_HEIGHT
 
+#define STEP_SIZE (10.f)
+
 class KapiBaraMind : public rclcpp::Node
 {
    
@@ -127,6 +129,8 @@ class KapiBaraMind : public rclcpp::Node
     number orientation[4];
 
     float yaw;
+
+    number yaw_integral;
 
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
@@ -151,7 +155,7 @@ class KapiBaraMind : public rclcpp::Node
 
     long double last_reward;
 
-    void set_map_at(size_t x,size_t y,number value)
+    void set_map_at(int32_t x,int32_t y,number value)
     {
         // center the coordinates
 
@@ -168,7 +172,7 @@ class KapiBaraMind : public rclcpp::Node
         this->map[ offset ] = value;
     }
 
-    number get_map_at(size_t x,size_t y)
+    number get_map_at(int32_t x,int32_t y)
     {
         // center the coordinates
 
@@ -230,9 +234,9 @@ class KapiBaraMind : public rclcpp::Node
 
         const auto& pose = odom->pose.pose;
 
-        this->position[0] = static_cast<number>(pose.position.x);
-        this->position[1] = static_cast<number>(pose.position.y);
-        this->position[2] = static_cast<number>(pose.position.z);
+        this->position[0] = static_cast<number>(pose.position.x)*STEP_SIZE;
+        this->position[1] = static_cast<number>(pose.position.y)*STEP_SIZE;
+        this->position[2] = static_cast<number>(pose.position.z)*STEP_SIZE;
 
 
         tf2::Quaternion quat;
@@ -248,11 +252,8 @@ class KapiBaraMind : public rclcpp::Node
 
         this->yaw = y;
 
-        RCLCPP_INFO(this->get_logger(),"Robot coordinates: %f, %f,%f yaw: %f",
+        RCLCPP_DEBUG(this->get_logger(),"Robot coordinates: %f, %f,%f yaw: %f",
         pose.position.x,pose.position.y,pose.position.z,this->yaw);
-
-        RCLCPP_INFO(this->get_logger(),"Robot coordinates 1: %f, %f,%f yaw: %f",
-        this->position[0],this->position[1],this->position[2],this->yaw);
 
         // append orientaion data
 
@@ -395,8 +396,92 @@ class KapiBaraMind : public rclcpp::Node
 
     void network_callback()
     {
-        RCLCPP_DEBUG(this->get_logger(),"Network fired!");
+        RCLCPP_INFO(this->get_logger(),"Network fired!");
 
+        // get values of neighbourhood blocks
+        number blocks[9];
+
+        int32_t x = this->position[0];
+        int32_t y = this->position[1];
+
+        number yaw = this->yaw;
+
+        // up
+        blocks[0] = this->get_map_at(x,y+1);
+
+        // up,right
+        blocks[1] = this->get_map_at(x-1,y+1);
+
+        // right
+        blocks[2] = this->get_map_at(x-1,y);
+
+        // down, right
+        blocks[3] = this->get_map_at(x-1,y-1);
+
+        // down
+        blocks[4] = this->get_map_at(x,y-1);
+
+        // down, left
+        blocks[5] = this->get_map_at(x+1,y-1);
+
+        // left
+        blocks[6] = this->get_map_at(x+1,y);
+
+        // up,left
+        blocks[7] = this->get_map_at(x+1,y+1);
+
+        // center
+        blocks[8] = this->get_map_at(x,y);
+
+        number max_blocks = blocks[0];
+
+        size_t max_i = 0;
+
+        for(size_t i=1;i<9;++i)
+        {
+            if( blocks[i] > max_blocks )
+            {
+                max_blocks = blocks[i];
+
+                max_i = i;
+            }
+        }
+
+        // robot stay in place
+
+        RCLCPP_INFO(this->get_logger(),"Current block: %f",blocks[8]);
+
+        if( max_i == 8 )
+        {
+            this->yaw_integral = 0.f;
+            RCLCPP_INFO(this->get_logger(),"Robot stay in place!");
+            return;
+        }
+
+        RCLCPP_INFO(this->get_logger(),"Next block: %f",blocks[max_i]);
+
+        number target_angle = static_cast<number>(max_i) * (M_PI/4.f) - (M_PI);
+
+        number angle_error = target_angle - yaw;
+
+        if( abs(angle_error) > 0.1f )
+        {
+            RCLCPP_INFO(this->get_logger(),"Target angle %f, current angle %f",target_angle,yaw);
+
+            this->yaw_integral += 0.001f*angle_error;
+
+            number angular_velocity = 2.f*angle_error + 0.5f*this->yaw_integral;
+
+            this->send_twist(0.f,angular_velocity);
+        }
+        else
+        {
+            this->yaw_integral = 0.f;
+
+            RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,blocks[8]);
+
+            this->send_twist(1.f,0.f);
+        }
 
     }
 
@@ -427,6 +512,8 @@ class KapiBaraMind : public rclcpp::Node
         this->last_reward = 0.f;
 
         this->init_map();
+
+        this->yaw_integral = 0.f;
 
         // add all required subscriptions
 
@@ -460,15 +547,20 @@ class KapiBaraMind : public rclcpp::Node
         
     }
 
-    void stop_motors()
+    void send_twist(float linear,float angular)
     {
         geometry_msgs::msg::Twist twist;
 
-        twist.angular.z = 0.f;
+        twist.angular.z = angular;
 
-        twist.linear.x = 0.f;
+        twist.linear.x = linear;
 
         this->twist_publisher->publish(twist);
+    }
+
+    void stop_motors()
+    {
+        this->send_twist(0.f,0.f);
     }
 
 
