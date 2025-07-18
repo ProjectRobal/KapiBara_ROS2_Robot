@@ -146,10 +146,6 @@ class EmotionEstimator(Node):
         
         model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',self.get_parameter('audio_model').get_parameter_value().string_value)
         
-        self.get_logger().info("Loading KapiBara Audio model from: "+model_path)
-        self.hearing = KapibaraAudio(path=model_path ,tflite=True)
-        self.get_logger().info("Loaded KapiBara Audio model")
-        
         self.bridge = CvBridge()
         
         # initialize model
@@ -948,7 +944,8 @@ class EmotionEstimator(Node):
         
         start = timer()
         
-        output,spectogram = self.hearing.input(self.mic_buffor)
+        # We are going to replace it with something simpler
+        # output,spectogram = self.hearing.input(self.mic_buffor)
         
         spectogram = spectogram.numpy()
         
@@ -959,13 +956,13 @@ class EmotionEstimator(Node):
                 
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         
-        self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
+        # self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
         
         
         
         self._emotions_lock.acquire()
         
-        self.audio_output = output
+        # self.audio_output = output
         
         self._emotions_lock.release()
         
