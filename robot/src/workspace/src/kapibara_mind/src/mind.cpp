@@ -132,6 +132,10 @@ class KapiBaraMind : public rclcpp::Node
 
     number yaw_integral;
 
+    number target_angle;
+
+    bool moving_to_block;
+
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
 
@@ -406,63 +410,93 @@ class KapiBaraMind : public rclcpp::Node
 
         number yaw = this->yaw;
 
-        // up
-        blocks[0] = this->get_map_at(x,y+1);
-
-        // up,right
-        blocks[1] = this->get_map_at(x-1,y+1);
-
-        // right
-        blocks[2] = this->get_map_at(x-1,y);
-
-        // down, right
-        blocks[3] = this->get_map_at(x-1,y-1);
-
-        // down
-        blocks[4] = this->get_map_at(x,y-1);
-
-        // down, left
-        blocks[5] = this->get_map_at(x+1,y-1);
-
-        // left
-        blocks[6] = this->get_map_at(x+1,y);
-
-        // up,left
-        blocks[7] = this->get_map_at(x+1,y+1);
-
-        // center
-        blocks[8] = this->get_map_at(x,y);
-
-        number max_blocks = blocks[0];
-
-        size_t max_i = 0;
-
-        for(size_t i=1;i<9;++i)
+        if( !this->moving_to_block )
         {
-            if( blocks[i] > max_blocks )
+
+            // up
+            blocks[0] = this->get_map_at(x,y+1);
+
+            // up,right
+            blocks[1] = this->get_map_at(x-1,y+1);
+
+            // right
+            blocks[2] = this->get_map_at(x-1,y);
+
+            // down, right
+            blocks[3] = this->get_map_at(x-1,y-1);
+
+            // down
+            blocks[4] = this->get_map_at(x,y-1);
+
+            // down, left
+            blocks[5] = this->get_map_at(x+1,y-1);
+
+            // left
+            blocks[6] = this->get_map_at(x+1,y);
+
+            // up,left
+            blocks[7] = this->get_map_at(x+1,y+1);
+
+            // center
+            blocks[8] = this->get_map_at(x,y);
+
+            number max_blocks = blocks[0];
+
+            size_t max_i = 0;
+
+            number sum = 0.f;
+
+            // calculate probability of moving to a field
+            for(size_t i=0;i<9;++i)
             {
-                max_blocks = blocks[i];
+                blocks[i] = std::exp(blocks[i]);
 
-                max_i = i;
+                sum += blocks[i];
             }
+
+            for(size_t i=0;i<9;++i)
+            {
+                blocks[i] /= sum;
+            }
+
+
+            // select based on probability
+            snn::UniformInit<0.f,1.f> dice;
+
+            number dice_shot = dice.init();
+
+            number thre = 0.f;
+
+            for(size_t i=0;i<9;++i)
+            {
+                thre += blocks[i];
+
+                if( thre >= dice_shot )
+                {
+                    max_i = i;
+                    break;
+                }
+            }
+
+            // robot stay in place
+
+            RCLCPP_INFO(this->get_logger(),"Current block: %f",blocks[8]);
+
+            if( max_i == 8 )
+            {
+                this->yaw_integral = 0.f;
+                RCLCPP_INFO(this->get_logger(),"Robot stay in place!");
+                return;
+            }
+
+            RCLCPP_INFO(this->get_logger(),"Next block: %f",blocks[max_i]);
+
+            this->target_angle = static_cast<number>(max_i) * (M_PI/4.f) - (M_PI);
+
+            this->moving_to_block = true;
         }
 
-        // robot stay in place
-
-        RCLCPP_INFO(this->get_logger(),"Current block: %f",blocks[8]);
-
-        if( max_i == 8 )
-        {
-            this->yaw_integral = 0.f;
-            RCLCPP_INFO(this->get_logger(),"Robot stay in place!");
-            return;
-        }
-
-        RCLCPP_INFO(this->get_logger(),"Next block: %f",blocks[max_i]);
-
-        number target_angle = static_cast<number>(max_i) * (M_PI/4.f) - (M_PI);
-
-        number angle_error = target_angle - yaw;
+        number angle_error = this->target_angle - yaw;
 
         if( abs(angle_error) > 0.1f )
         {
@@ -470,7 +504,7 @@ class KapiBaraMind : public rclcpp::Node
 
             this->yaw_integral += 0.001f*angle_error;
 
-            number angular_velocity = 2.f*angle_error + 0.5f*this->yaw_integral;
+            number angular_velocity = 5.f*angle_error + 1.f*this->yaw_integral;
 
             this->send_twist(0.f,angular_velocity);
         }
@@ -481,6 +515,8 @@ class KapiBaraMind : public rclcpp::Node
             RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,blocks[8]);
 
             this->send_twist(1.f,0.f);
+
+            this->moving_to_block = false;
         }
 
     }
@@ -489,11 +525,11 @@ class KapiBaraMind : public rclcpp::Node
     {
         // we will load map from file but by default we will initialize it with random data
 
-        snn::GaussInit<0.f,1.f> gauss;
+        // snn::GaussInit<0.f,1.f> gauss;
 
         for(size_t i=0;i<MAP_SIZE;++i)
         {
-            this->map[i] = gauss.init();
+            this->map[i] = 0.f;
         }
     }
 
@@ -502,6 +538,9 @@ class KapiBaraMind : public rclcpp::Node
     KapiBaraMind()
     : Node("kapibara_mind")
     {
+        this->target_angle = 0.f;
+
+        this->moving_to_block = false;
 
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
 
