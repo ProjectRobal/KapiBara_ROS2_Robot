@@ -836,7 +836,7 @@ class EmotionEstimator(Node):
         
         accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 9.81)
                 
-        if accel_value > 0.75:
+        if accel_value > 2.0:
             self.get_logger().info("Pain occured!")
             
             self._emotions_lock.acquire()
@@ -899,7 +899,7 @@ class EmotionEstimator(Node):
         if self.move_lock:
             self.thrust = 0
 
-        if self.thrust > 1.0:
+        if self.thrust > 3.0:
             self.get_logger().info("Too harsh force")
             
             self._emotions_lock.acquire()
