@@ -136,6 +136,9 @@ class KapiBaraMind : public rclcpp::Node
 
     bool moving_to_block;
 
+    number last_x;
+    number last_y;
+
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
 
@@ -494,6 +497,9 @@ class KapiBaraMind : public rclcpp::Node
             this->target_angle = static_cast<number>(max_i) * (M_PI/4.f) - (M_PI);
 
             this->moving_to_block = true;
+
+            this->last_x = x;
+            this->last_y = y;
         }
 
         number angle_error = this->target_angle - yaw;
@@ -504,7 +510,7 @@ class KapiBaraMind : public rclcpp::Node
 
             this->yaw_integral += 0.001f*angle_error;
 
-            number angular_velocity = 5.f*angle_error + 1.f*this->yaw_integral;
+            number angular_velocity = 2.5f*angle_error + 1.f*this->yaw_integral;
 
             this->send_twist(0.f,angular_velocity);
         }
@@ -516,7 +522,12 @@ class KapiBaraMind : public rclcpp::Node
 
             this->send_twist(1.f,0.f);
 
-            this->moving_to_block = false;
+            if( x != this->last_x || y != this->last_y )
+            {
+
+                this->moving_to_block = false;
+
+            }
         }
 
     }

@@ -164,7 +164,7 @@ class EmotionEstimator(Node):
         
         self.get_logger().info('Initializing LiteFaceDetector...')
         
-        self.face_detect = UltraLightFaceDetecion(filepath=model_path)
+        # self.face_detect = UltraLightFaceDetecion(filepath=model_path)
         
         self.get_logger().info('Model initialized!')
         
@@ -527,42 +527,44 @@ class EmotionEstimator(Node):
         
         self._face_lock.acquire()
         
-        boxes,scores = self.face_detect.inference(image)
+        # since I don't have appropiate model we left it empty for now
         
-        self.current_embeddings.clear()
+        # boxes,scores = self.face_detect.inference(image)
         
-        mean_embed = np.zeros(160,dtype=np.float32)
+        # self.current_embeddings.clear()
         
-        sum_distances = 0
+        # mean_embed = np.zeros(160,dtype=np.float32)
         
-        # A mean embedding takes into account distance between robot and face.
+        # sum_distances = 0
         
-        for box in boxes.astype(int):
+        # # A mean embedding takes into account distance between robot and face.
+        
+        # for box in boxes.astype(int):
             
-            img = image[box[1]:box[3],box[0]:box[2]]
+        #     img = image[box[1]:box[3],box[0]:box[2]]
             
-            width = box[3] - box[1]
-            height = box[2] - box[0]
+        #     width = box[3] - box[1]
+        #     height = box[2] - box[0]
             
-            distance = width*height
+        #     distance = width*height
             
-            sum_distances += distance
+        #     sum_distances += distance
             
-            embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
+        #     embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
             
-            mean_embed += embed*distance
+        #     mean_embed += embed*distance
             
-            # set of embedding and estimated distance
-            self.current_embeddings.append([embed,distance])
+        #     # set of embedding and estimated distance
+        #     self.current_embeddings.append([embed,distance])
         
-        if len(boxes) != 0:
-            mean_embed /= sum_distances
+        # if len(boxes) != 0:
+        #     mean_embed /= sum_distances
         
-        face = FaceEmbed()
+        # face = FaceEmbed()
         
-        face.embedding = mean_embed.tolist()
+        # face.embedding = mean_embed.tolist()
         
-        self.face_publisher.publish(face)
+        # self.face_publisher.publish(face)
         
         self._face_lock.release()
         
@@ -833,10 +835,8 @@ class EmotionEstimator(Node):
         accel=imu.linear_acceleration
         
         accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 9.81)
-        
-        self.get_logger().info("{}".format(accel_value))
-        
-        if accel_value > 0.5:
+                
+        if accel_value > 0.75:
             self.get_logger().info("Pain occured!")
             
             self._emotions_lock.acquire()
