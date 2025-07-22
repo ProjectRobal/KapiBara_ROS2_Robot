@@ -103,6 +103,18 @@ using namespace std::chrono_literals;
 
 #define STEP_SIZE (10.f)
 
+struct vec_image_item
+{
+    sqlite3_int64 id;
+    float image[90*90];
+};
+
+struct image_item
+{
+    sqlite3_int64 id;  
+    float field[8*8];
+};
+
 class KapiBaraMind : public rclcpp::Node
 {
    
@@ -111,6 +123,8 @@ class KapiBaraMind : public rclcpp::Node
     number position[3];
 
     number orientation[4];
+
+    float image[90*90];
 
     float yaw;
 
@@ -134,7 +148,7 @@ class KapiBaraMind : public rclcpp::Node
 
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr spectogram_subscription;
 
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription;
+    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription;
 
     rclcpp::Subscription<kapibara_interfaces::msg::Emotions>::SharedPtr emotions_subscription;
 
@@ -176,7 +190,7 @@ class KapiBaraMind : public rclcpp::Node
 
         if( offset >= MAP_SIZE )
         {
-            return std::nan("1");
+            return 0;
         }
 
         return this->map[offset];
@@ -314,7 +328,7 @@ class KapiBaraMind : public rclcpp::Node
         // }
     }
 
-    void image_callback(const sensor_msgs::msg::Image::SharedPtr img)
+    void image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr img)
     {
         RCLCPP_DEBUG(this->get_logger(),"Got image message!");
 
@@ -322,7 +336,7 @@ class KapiBaraMind : public rclcpp::Node
 
         try
         {
-            cv_ptr = cv_bridge::toCvCopy(img, img->encoding);
+            cv_ptr = cv_bridge::toCvCopy(img);
         }
         catch (cv_bridge::Exception& e)
         {
@@ -332,19 +346,21 @@ class KapiBaraMind : public rclcpp::Node
 
         cv::Mat& image = cv_ptr->image;
 
-        cv::Mat spectogram;
+        cv::Mat gray;
 
-        resize(image, spectogram, cv::Size(16, 16), cv::INTER_LINEAR); 
+        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
 
-        size_t iter = 426;
+        cv::Mat new_image;
 
-        // for(size_t y=0;y<16;y++)
-        // {
-        //     for(size_t x=0;x<16;x++)
-        //     {
-        //         this->inputs[iter++] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
-        //     }
-        // }
+        resize(gray, new_image, cv::Size(90, 90), cv::INTER_CUBIC); 
+
+        for(size_t y=0;y<90;y++)
+        {
+            for(size_t x=0;x<90;x++)
+            {
+                this->image[y*90+x] = static_cast<float>(new_image.at<uint8_t>(x,y))/255.f;
+            }
+        }
     }
 
     void emotions_callback(const kapibara_interfaces::msg::Emotions::SharedPtr emotions)
@@ -356,6 +372,19 @@ class KapiBaraMind : public rclcpp::Node
         this->last_reward = reward;
 
         this->set_map_at(this->position[0],this->position[1],reward);
+    }
+
+    void update_map_with_field(int32_t x,int32_t y,float* field)
+    {
+        for(size_t _y=0;_y<8;_y++)
+        {
+            for(size_t _x=0;_x<8;_x++)
+            {
+                float val = field[_y*8 + _x];
+
+                this->set_map_at(x+(_x-4),y+(_y-4),val);
+            }
+        }
     }
 
     void network_callback()
@@ -372,6 +401,17 @@ class KapiBaraMind : public rclcpp::Node
 
         if( !this->moving_to_block )
         {
+
+            sqlite3_int64 id = this->get_field_id_from_database();
+
+            if( id > -1)
+            {
+                float field[8*8];
+
+                this->get_field_by_id(id,field);
+
+                this->update_map_with_field(this->position[0],this->position[1],field);
+            }
 
             // up
             blocks[0] = this->get_map_at(x,y+1);
@@ -487,6 +527,210 @@ class KapiBaraMind : public rclcpp::Node
             }
         }
 
+        this->update_database();
+
+    }
+
+    void get_current_field(float* field)
+    {
+        for(int32_t y=0;y<8;++y)
+        {
+            for(int32_t x=0;x<8;++x)
+            {
+                float value = this->get_map_at(this->position[0]+(x-4),this->position[1]+(y-4));
+
+                field[ y*8 + x ] = value;
+            }
+        }
+    }
+
+    // get id of field associated to current image, return -1 if not found
+    sqlite3_int64 get_field_id_from_database()
+    {
+        sqlite3_stmt *stmt;
+
+        int rc = SQLITE_OK;
+
+        rc = sqlite3_prepare_v2(this->db,
+            "SELECT "
+            "  id, "
+            "  distance "
+            "FROM vec_images "
+            "WHERE images_embedding MATCH ? AND k = 3 "
+            "ORDER BY distance "
+            "LIMIT 1 "
+        , -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt, 1, this->image, sizeof(this->image), SQLITE_STATIC);
+
+        rc = sqlite3_step(stmt);
+
+        sqlite3_int64 rowid = -1;
+
+        if( rc == SQLITE_ROW )
+        {
+            rowid = sqlite3_column_int64(stmt, 0);
+            double distance = sqlite3_column_double(stmt, 1);
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
+        }
+
+        sqlite3_finalize(stmt);
+
+        return rowid;
+
+    }
+
+    void get_field_by_id(sqlite3_int64 id, float* field)
+    {
+        RCLCPP_INFO(this->get_logger(),"Got field id: %i",id);
+
+        if( id <= -1 )
+        {
+            for(size_t i=0;i<8*8;++i)
+            {
+                field[i] = 0.f;
+            }
+
+            return;
+        }
+
+
+        sqlite3_stmt *stmt;
+
+        int rc = SQLITE_OK;
+
+        rc = sqlite3_prepare_v2(this->db,
+            "SELECT "
+            "  field "
+            "FROM images "
+            "WHERE id = ? "
+            "LIMIT 1"
+        , -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_int64(stmt,1,id);
+
+        rc = sqlite3_step(stmt);
+
+        float *_field;
+
+        if( rc != SQLITE_ROW )
+        {
+            _field = (float*)sqlite3_column_blob(stmt,0);
+
+            for(size_t i=0;i<8*8;++i)
+            {
+                field[i] = _field[i];
+            }
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
+        }
+
+        sqlite3_finalize(stmt);
+
+    }
+
+    void update_field_with_id(sqlite3_int64 id)
+    {
+        int rc = SQLITE_OK;
+        sqlite3_stmt *stmt;
+
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_prepare_v2(this->db, "UPDATE images SET field = ? WHERE id = ?", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        float field[8*8];
+
+        this->get_current_field(field);
+
+        sqlite3_bind_blob(stmt,1,field,sizeof(field), SQLITE_STATIC);
+        sqlite3_bind_int64(stmt,2,id);
+
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_finalize(stmt);
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+    }
+
+    // update database with current image embedding and positions 
+    void update_database()
+    {
+        // we should check if image is aleardy present in database
+
+        sqlite3_int64 id = this->get_field_id_from_database();
+
+        RCLCPP_INFO(this->get_logger(),"Got id up database: %i",id);
+
+        if( id > -1 )
+        {
+            // update exisiting field
+            this->update_field_with_id(id);
+            return;
+        }
+
+        sqlite3_stmt *stmt;
+        
+        int rc = SQLITE_OK;
+
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_images(images_embedding) VALUES (?)", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt,1,this->image,sizeof(this->image), SQLITE_STATIC);
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_finalize(stmt);
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        // get field 
+
+        float field[8*8];
+
+        this->get_current_field(field);
+
+
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_prepare_v2(this->db, "INSERT INTO images(field) VALUES (?)", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt,1,field,sizeof(field), SQLITE_STATIC);
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_finalize(stmt);
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        
     }
 
     void init_map()
@@ -538,8 +782,8 @@ class KapiBaraMind : public rclcpp::Node
         this->spectogram_subscription = this->create_subscription<sensor_msgs::msg::Image>(
       "spectogram", 10, std::bind(&KapiBaraMind::spectogram_callback, this, _1));
 
-      this->image_subscription = this->create_subscription<sensor_msgs::msg::Image>(
-      "raw_image/compressed", 10, std::bind(&KapiBaraMind::image_callback, this, _1));
+      this->image_subscription = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+      "kapibara_camera/image_raw/compressed", 10, std::bind(&KapiBaraMind::image_callback, this, _1));
 
         this->emotions_subscription = this->create_subscription<kapibara_interfaces::msg::Emotions>(
       "emotions", 10, std::bind(&KapiBaraMind::emotions_callback, this, _1));
@@ -579,32 +823,49 @@ class KapiBaraMind : public rclcpp::Node
         this->stop_motors();
     }
 
+    inline void validate_sqlite(int rc)
+    {
+        if( rc != SQLITE_OK && rc != SQLITE_DONE )
+        {
+            RCLCPP_ERROR(this->get_logger(),"SQLITE error: %s",sqlite3_errmsg(this->db));
+        }
+    }
+
     void init_database()
     {
         int rc = SQLITE_OK;
 
         // create database
         rc = sqlite3_open("mind_database.db", &db);
-        assert(rc == SQLITE_OK);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
         sqlite3_stmt *stmt;
 
         // create vector table if it doesn't exist
 
-        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[50176])", -1, &stmt, NULL);
-        assert(rc == SQLITE_OK);
+        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
+        
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         rc = sqlite3_step(stmt);
-        assert(rc == SQLITE_DONE);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         sqlite3_finalize(stmt);
 
         // create table if it doesn't exist
-        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS images(id INTEGER PRIMARY KEY,FLOAT float[64])", -1, &stmt, NULL);
-        assert(rc == SQLITE_OK);
+        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS images(id INTEGER PRIMARY KEY,field FLOAT[64])", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         rc = sqlite3_step(stmt);
-        assert(rc == SQLITE_DONE);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         sqlite3_finalize(stmt);
-
-
 
 
     }
