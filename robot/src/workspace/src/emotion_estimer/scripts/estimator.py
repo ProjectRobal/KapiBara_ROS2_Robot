@@ -89,9 +89,6 @@ class EmotionEstimator(Node):
         
         self.declare_parameter('ears_topic','ears_controller/commands')
         
-        # a list of topics of tof sensors
-        self.declare_parameter('points_topic', 'midas/points' )
-        
         # a orientation callback
         self.declare_parameter('imu', 'imu')
         
@@ -109,7 +106,6 @@ class EmotionEstimator(Node):
         
         sim:bool = self.get_parameter('sim').get_parameter_value().bool_value
         
-        midas_model:str = 'Midas-V2-Quantized_edgetpu.tflite' if not sim else 'Midas-V2-Quantized.tflite'
         deepid_model:str = 'deepid_edgetpu.tflite' if not sim else 'deepid.tflite'
         face_model:str = 'slim_edgetpu.tflite' if not sim else 'slim.tflite'
         
@@ -150,16 +146,6 @@ class EmotionEstimator(Node):
         
         self.bridge = CvBridge()
         
-        # initialize model
-        self.get_logger().info('Initializing MiDas2...')
-        
-        model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',midas_model)
-        
-        self.midas = midasDepthEstimator(model_path)
-        
-        self.get_logger().info('Model initialized!')
-        
-        
         model_path = os.path.join(get_package_share_directory('emotion_estimer'),'model',face_model)
         
         self.get_logger().info('Initializing LiteFaceDetector...')
@@ -176,12 +162,7 @@ class EmotionEstimator(Node):
         self.deep_id = DeepIDTFLite(filepath=model_path)
         
         self.get_logger().info('Model initialized!')
-        
-        self.depth_publisher = self.create_publisher(CompressedImage, 'midas/depth/compressed', 10)
-        self.depth_publisher_raw = self.create_publisher(Image, 'midas/depth', 10)
-        
-        self.depth_point_publisher = self.create_publisher(PointCloud2,'midas/points',10)
-        
+                
         self.spectogram_publisher = self.create_publisher(Image, 'spectogram', 10)
         
         self.subscription = self.create_subscription(
@@ -567,15 +548,6 @@ class EmotionEstimator(Node):
         # self.face_publisher.publish(face)
         
         self._face_lock.release()
-        
-        start = timer()
-        
-        colorDepth = self.midas.estimateDepth(image)
-        
-        self.get_logger().debug('Estimation time: %f s' % ( timer() - start ))
-        
-        self.depth_publisher.publish(self.bridge.cv2_to_compressed_imgmsg(colorDepth))
-        self.depth_publisher_raw.publish(self.bridge.cv2_to_imgmsg(colorDepth))
         
         gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         

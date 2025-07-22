@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <experimental/simd>
 
+
 // specific number types used by neurons
 typedef float number;
 
