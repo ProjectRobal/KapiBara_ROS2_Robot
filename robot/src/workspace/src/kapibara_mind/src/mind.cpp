@@ -556,7 +556,7 @@ class KapiBaraMind : public rclcpp::Node
             "  id, "
             "  distance "
             "FROM vec_images "
-            "WHERE images_embedding MATCH ? AND k = 3 "
+            "WHERE images_embedding MATCH ?1 AND k = 3 "
             "ORDER BY distance "
             "LIMIT 1 "
         , -1, &stmt, NULL);
@@ -622,7 +622,7 @@ class KapiBaraMind : public rclcpp::Node
 
         float *_field;
 
-        if( rc != SQLITE_ROW )
+        if( rc == SQLITE_ROW )
         {
             _field = (float*)sqlite3_column_blob(stmt,0);
 
@@ -812,6 +812,17 @@ class KapiBaraMind : public rclcpp::Node
         this->twist_publisher->publish(twist);
     }
 
+    void dump_map()
+    {
+        std::fstream file;
+
+        file.open("behv_map.map",std::ios::binary|std::ios::out);
+
+        file.write((char*)&this->map,sizeof(this->map));
+
+        file.close();
+    }
+
     void stop_motors()
     {
         this->send_twist(0.f,0.f);
@@ -878,6 +889,7 @@ class KapiBaraMind : public rclcpp::Node
     ~KapiBaraMind()
     {
         this->close_database();
+        this->dump_map();
     }   
 
 };
