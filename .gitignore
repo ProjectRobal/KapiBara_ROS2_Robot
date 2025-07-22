@@ -62,6 +62,10 @@ coverage.xml
 *.mo
 *.pot
 
+*.db
+*.db-journal
+*.map
+
 # Django stuff:
 *.log
 
