@@ -6,6 +6,8 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from rclpy.executors import MultiThreadedExecutor
 
+import scipy
+
 
 from sensor_msgs.msg import Range,Imu,PointCloud2
 from geometry_msgs.msg import Quaternion
@@ -451,7 +453,7 @@ class EmotionEstimator(Node):
         # bordorm
         
         # I need to adjust sound model so anger will be zero for now
-        emotions[0] = (self.audio_output == 4)*0.0
+        emotions[0] = (self.audio_output == 4)*0.1
         emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 4.0*self.pain_value
         emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
         emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1
@@ -921,8 +923,15 @@ class EmotionEstimator(Node):
         # We are going to replace it with something simpler
         # output,spectogram = self.hearing.input(self.mic_buffor)
         
-        spectogram = spectogram.numpy()
-        
+        nperseg = 255
+        noverlap = nperseg - 128 # 255 - 128 = 127
+
+        # Calculate the spectrogram
+        # f: array of sample frequencies
+        # t_spec: array of segment times
+        # Sxx: Spectrogram of x. By default, the last axis of Sxx corresponds to the segment times.
+        f, t_spec, spectogram = scipy.signal.spectrogram(self.mic_buffor, fs=16000, nperseg=nperseg, noverlap=noverlap)
+                
         spectogram = cv2.normalize(spectogram,None,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX).astype(np.uint8)
         
         # publish last spectogram
