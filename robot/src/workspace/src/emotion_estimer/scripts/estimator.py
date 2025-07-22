@@ -269,6 +269,8 @@ class EmotionEstimator(Node):
         
         self.audio_output = 0
         
+        self.audio_fear = 0
+        
         
         self.face_database = VectorDatabase(self.face_db_name,[{
         "name":"faces",
@@ -454,7 +456,7 @@ class EmotionEstimator(Node):
         
         # I need to adjust sound model so anger will be zero for now
         emotions[0] = (self.audio_output == 4)*0.1
-        emotions[1] = (self.audio_output == 3)*0.1 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 4.0*self.pain_value
+        emotions[1] = (self.audio_output == 3)*0.1 + self.audio_fear*0.25 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 4.0*self.pain_value
         emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
         emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1
         emotions[4] = np.floor(self.procratination_counter/5.0)
@@ -464,6 +466,10 @@ class EmotionEstimator(Node):
         self.uncertain_sense = self.uncertain_sense / 1.35
         self.thrust_fear = self.thrust_fear / 2
         self.jerk_fear = self.jerk_fear / 2
+        self.audio_fear = self.audio_fear / 1.5
+        
+        if self.audio_fear <= 0.01:
+            self.audio_fear = 0.0
         
         if self.pain_value <= 0.01:
             self.pain_value = 0.0
@@ -941,11 +947,14 @@ class EmotionEstimator(Node):
         
         # self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
         
-        
-        
         self._emotions_lock.acquire()
         
         # self.audio_output = output
+        
+        mean = np.mean(np.abs(combine))
+        
+        if mean >= 0.7:
+            self.audio_fear = 1.0
         
         self._emotions_lock.release()
         
