@@ -6,7 +6,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from rclpy.executors import MultiThreadedExecutor
 
-import scipy
+from scipy.signal import spectrogram
 
 
 from sensor_msgs.msg import Range,Imu,PointCloud2
@@ -49,8 +49,6 @@ import numpy as np
 
 from ament_index_python.packages import get_package_share_directory,get_package_prefix
 
-from emotion_estimer.kapibara_audio import KapibaraAudio
-from emotion_estimer.midas import midasDepthEstimator
 
 from emotion_estimer.DeepIDTFLite import DeepIDTFLite
 from emotion_estimer.TFLiteFaceDetector import UltraLightFaceDetecion
@@ -152,7 +150,7 @@ class EmotionEstimator(Node):
         
         self.get_logger().info('Initializing LiteFaceDetector...')
         
-        # self.face_detect = UltraLightFaceDetecion(filepath=model_path)
+        self.face_detect = UltraLightFaceDetecion(filepath=model_path)
         
         self.get_logger().info('Model initialized!')
         
@@ -518,186 +516,44 @@ class EmotionEstimator(Node):
         
         # since I don't have appropiate model we left it empty for now
         
-        # boxes,scores = self.face_detect.inference(image)
+        boxes,scores = self.face_detect.inference(image)
         
-        # self.current_embeddings.clear()
+        self.current_embeddings.clear()
         
-        # mean_embed = np.zeros(160,dtype=np.float32)
+        mean_embed = np.zeros(160,dtype=np.float32)
         
-        # sum_distances = 0
+        sum_distances = 0
         
-        # # A mean embedding takes into account distance between robot and face.
+        # A mean embedding takes into account distance between robot and face.
         
-        # for box in boxes.astype(int):
+        for box in boxes.astype(int):
             
-        #     img = image[box[1]:box[3],box[0]:box[2]]
+            img = image[box[1]:box[3],box[0]:box[2]]
             
-        #     width = box[3] - box[1]
-        #     height = box[2] - box[0]
+            width = box[3] - box[1]
+            height = box[2] - box[0]
             
-        #     distance = width*height
+            distance = width*height
             
-        #     sum_distances += distance
+            sum_distances += distance
             
-        #     embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
+            embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
             
-        #     mean_embed += embed*distance
+            mean_embed += embed*distance
             
-        #     # set of embedding and estimated distance
-        #     self.current_embeddings.append([embed,distance])
+            # set of embedding and estimated distance
+            self.current_embeddings.append([embed,distance])
         
-        # if len(boxes) != 0:
-        #     mean_embed /= sum_distances
+        if len(boxes) != 0:
+            mean_embed /= sum_distances
         
-        # face = FaceEmbed()
+        face = FaceEmbed()
         
-        # face.embedding = mean_embed.tolist()
+        face.embedding = mean_embed.tolist()
         
-        # self.face_publisher.publish(face)
+        self.face_publisher.publish(face)
         
         self._face_lock.release()
-        
-        gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        gray_img = cv2.resize(gray_img,(16,16))
-        
-        gray_img = cv2.normalize(gray_img, None, 0.0, 1.0, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        
-        width,height = gray_img.shape
-        
-        pointcloud_msg = PointCloud2()
-        pointcloud_msg.header.frame_id = "camera_optical"
-        
-        point_x = PointField()
-        
-        point_x.name = 'x'
-        point_x.offset = 0
-        point_x.datatype = PointField.FLOAT32
-        point_x.count = 1
-        
-        point_y = PointField()
-        
-        point_y.name = 'y'
-        point_y.offset = 4
-        point_y.datatype = PointField.FLOAT32
-        point_y.count = 1
-        
-        point_z = PointField()
-        
-        point_z.name = 'z'
-        point_z.offset = 8
-        point_z.datatype = PointField.FLOAT32
-        point_z.count = 1
-        
-        point_i = PointField()
-        
-        point_i.name = 'intensity'
-        point_i.offset = 12
-        point_i.datatype = PointField.FLOAT32
-        point_i.count = 1
-
-        # Define the point fields (attributes)        
-        fields =[point_x,
-                point_y,
-                point_z,
-                point_i,
-                ]
-
-        pointcloud_msg.fields = fields
-
-        pointcloud_msg.height = height
-        pointcloud_msg.width = width
-        
-        # Float occupies 4 bytes. Each point then carries 16 bytes.
-        pointcloud_msg.point_step = len(fields) * 4 
-        
-        total_num_of_points = pointcloud_msg.height * pointcloud_msg.width
-        pointcloud_msg.row_step = pointcloud_msg.point_step * total_num_of_points
-        pointcloud_msg.is_dense = True
-        
-        scale = 1.0
-        
-        data = np.zeros((height,width,len(fields)),dtype=np.float32)
-        
-        self.points_covarage = 0
-        
-        min = 100
-        
-        for y in range(height):
-            for x in range(width):
-                pixel = gray_img[x,y]
-                
-                distance = 1.0 / ( ((pixel)*scale) + 10e-6)
-                
-                data[y][x][1] = (x - width/2)/width
-                data[y][x][0] = (y - height/2)/height
-                data[y][x][2] = distance
-                data[y][x][3] = pixel/255.0
-                
-                if distance < 1.1:
-                    self.points_covarage += 1
-                    
-                if distance < min:
-                    min = distance
-        
-        pointcloud_msg.data = data.tobytes()
-                
-        self.depth_point_publisher.publish(pointcloud_msg)
-                
-        self.get_logger().debug("Min point: "+str(min))
-        self.get_logger().debug("Point coverage: "+str(self.points_covarage))
-        
-        # analyze for walls
-        
-        points = data[:,:,2].reshape(height,width)
-        
-        points_filtered = np.where(points<1.4,1,0)
-        
-        img = cv2.normalize(points_filtered, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-                    
-        img = cv2.transpose(img)
-
-        contours, hierarch = cv2.findContours(img,cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        # print(len(contours))
-        
-        spot_locations = []
-        
-        for i,con in enumerate(contours):
-            
-            center = np.mean(con,axis=0)[0]
-            spot_locations.append(center)
-            
-            self.get_logger().debug("Position of points "+str(i)+" : "+str(center))
-            
-        
-        if len(spot_locations)==2:
-            passed = 0
-            
-            for spot in spot_locations:
-                if spot[1] < 9 and spot[1] > 7:
-                    passed+=1
-            
-            if passed == 2:
-                self.get_logger().debug("Found wall!")
-                
-                self._emotions_lock.acquire()
-                
-                self.found_wall = True
-                
-                self._emotions_lock.release()
-                
-                return
-        elif len(spot_locations)==1:
-            self.get_logger().debug("Found wall!")
-            
-            self._emotions_lock.acquire()
-            
-            self.found_wall = True
-            
-            self._emotions_lock.release()
-            
-            return
         
         self._emotions_lock.acquire()
         
@@ -936,12 +792,12 @@ class EmotionEstimator(Node):
         # f: array of sample frequencies
         # t_spec: array of segment times
         # Sxx: Spectrogram of x. By default, the last axis of Sxx corresponds to the segment times.
-        f, t_spec, spectogram = scipy.signal.spectrogram(self.mic_buffor, fs=16000, nperseg=nperseg, noverlap=noverlap)
+        f, t_spec, _spectogram = spectrogram(self.mic_buffor, fs=16000, nperseg=nperseg, noverlap=noverlap)
                 
-        spectogram = cv2.normalize(spectogram,None,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        _spectogram = cv2.normalize(_spectogram,None,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX).astype(np.uint8)
         
         # publish last spectogram
-        self.spectogram_publisher.publish(self.bridge.cv2_to_imgmsg(spectogram))
+        self.spectogram_publisher.publish(self.bridge.cv2_to_imgmsg(_spectogram))
                 
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         
