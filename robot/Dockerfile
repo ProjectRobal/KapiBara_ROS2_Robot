@@ -9,21 +9,22 @@ COPY ./dependencies /app/dep
 
 COPY ./debs /debs
 
+RUN apt update
+
 RUN apt install software-properties-common -y
 
 RUN apt install -y curl gnupg2 lsb-release
 
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | gpg --dearmor --batch --yes -o /usr/share/keyrings/ros-archive-keyring.gpg
+# RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | gpg --dearmor --batch --yes -o /usr/share/keyrings/ros-archive-keyring.gpg
 
 # Add the ROS 2 repository for Jazzy (Ubuntu 24.04 is "noble")
-RUN echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2.list
+# RUN echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2.list
 
-
-RUN --mount=type=cache,target=/var/cache/apt apt update -y
-
+RUN apt update -y
 
 RUN apt install git ninja-build meson udev python3-ply python3-jinja2 libglib2.0-dev libgstreamer-plugins-base1.0-dev libboost-dev libgnutls28-dev openssl libtiff-dev pybind11-dev  -y
 
+RUN apt install python3-pip -y
 #RUN --mount=type=cache,target=/root/.cache/pip xargs pip3 install < /app/dep/python.txt
 
 RUN mkdir -p /app/src
@@ -49,9 +50,9 @@ RUN ninja -C build install
 
 WORKDIR /
 
-RUN echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+RUN echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | tee /etc/apt/sources.list.d/coral-edgetpu.list
 
-RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 
 RUN apt update
 

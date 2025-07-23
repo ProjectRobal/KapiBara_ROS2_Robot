@@ -9,6 +9,8 @@ COPY ./dependencies /app/dep
 
 COPY ./debs /debs
 
+RUN apt update
+
 RUN apt install software-properties-common -y
 
 RUN apt install -y curl gnupg2 lsb-release
