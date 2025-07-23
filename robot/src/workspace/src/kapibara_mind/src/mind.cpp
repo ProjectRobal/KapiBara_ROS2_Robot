@@ -17,6 +17,8 @@
 #include <sqlite3.h>
 #include <sqlite-vec.h>
 
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -126,6 +128,8 @@ class KapiBaraMind : public rclcpp::Node
 
     float image[90*90];
 
+    float laplace_image[90*90];
+
     float yaw;
 
     number yaw_integral;
@@ -139,6 +143,8 @@ class KapiBaraMind : public rclcpp::Node
 
 
     sqlite3 *db;
+
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr field_publisher;
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
 
@@ -354,11 +360,23 @@ class KapiBaraMind : public rclcpp::Node
 
         resize(gray, new_image, cv::Size(90, 90), cv::INTER_CUBIC); 
 
+        cv::Mat laplce_img;
+
+        cv::Laplacian(new_image,laplce_img,CV_64F);
+
         for(size_t y=0;y<90;y++)
         {
             for(size_t x=0;x<90;x++)
             {
                 this->image[y*90+x] = static_cast<float>(new_image.at<uint8_t>(x,y))/255.f;
+            }
+        }
+
+        for(size_t y=0;y<90;y++)
+        {
+            for(size_t x=0;x<90;x++)
+            {
+                this->laplace_image[y*90+x] = laplce_img.at<float>(x,y)/255.f;
             }
         }
     }
@@ -387,6 +405,84 @@ class KapiBaraMind : public rclcpp::Node
         }
     }
 
+    void get_map_field_at(int32_t x,int32_t y,float* field)
+    {
+        for(size_t _y=0;_y<8;_y++)
+        {
+            for(size_t _x=0;_x<8;_x++)
+            {
+                float val = field[_y*8 + _x];
+
+                field[_y*8 + _x] = this->get_map_at(x+(_x-4),y+(_y-4));
+            }
+        }
+    }
+
+    void publish_field(float field[])
+    {
+        sensor_msgs::msg::PointCloud2 msg;
+        msg.header.stamp = this->get_clock()->now();
+        msg.header.frame_id = "KapiBara/odom";
+
+        // Define the point cloud fields
+        msg.fields.resize(3);
+        msg.fields[0].name = "x";
+        msg.fields[0].offset = 0;
+        msg.fields[0].datatype = sensor_msgs::msg::PointField::FLOAT32;
+        msg.fields[0].count = 1;
+
+        msg.fields[1].name = "y";
+        msg.fields[1].offset = 4;
+        msg.fields[1].datatype = sensor_msgs::msg::PointField::FLOAT32;
+        msg.fields[1].count = 1;
+
+        msg.fields[2].name = "z";
+        msg.fields[2].offset = 8;
+        msg.fields[2].datatype = sensor_msgs::msg::PointField::FLOAT32;
+        msg.fields[2].count = 1;
+
+        msg.point_step = 12;
+        
+        // Create an 8x8 grid of points
+        int grid_size = 8;
+        double resolution = 0.25; // Distance between points
+        
+        // Calculate the total number of bytes needed for the point data
+        msg.row_step = grid_size * msg.point_step; // Bytes per row (width * point_step)
+        msg.data.resize(grid_size * grid_size * msg.point_step); // Total data size
+
+        // Use a pointer to fill the data directly
+        // This is more efficient than pushing back individual bytes
+        unsigned char *cloud_data_ptr = msg.data.data();
+
+        for (int i = 0; i < grid_size; ++i)
+        {
+            for (int j = 0; j < grid_size; ++j)
+            {
+                float x = static_cast<float>(i * resolution - (grid_size * resolution / 2.0)); // Center the grid
+                float y = static_cast<float>(j * resolution - (grid_size * resolution / 2.0));
+                
+                // Copy x, y, z into the data buffer
+                // This assumes little-endian system, which is common.
+                // If portability across different endian systems is critical,
+                // you might need to handle byte swapping explicitly.
+                std::memcpy(cloud_data_ptr, &x, sizeof(float));
+                cloud_data_ptr += sizeof(float);
+                std::memcpy(cloud_data_ptr, &y, sizeof(float));
+                cloud_data_ptr += sizeof(float);
+                std::memcpy(cloud_data_ptr, &field[i*8 + j], sizeof(float));
+                cloud_data_ptr += sizeof(float);
+            }
+        }
+
+        msg.width = grid_size;
+        msg.height = grid_size; // For a 2D point cloud, height > 1 is valid
+        msg.is_bigendian = false; // Most systems are little-endian
+        msg.is_dense = true;      // No invalid points
+
+        this->field_publisher->publish(msg);
+    }
+
     void network_callback()
     {
         RCLCPP_INFO(this->get_logger(),"Network fired!");
@@ -402,16 +498,52 @@ class KapiBaraMind : public rclcpp::Node
         if( !this->moving_to_block )
         {
 
-            sqlite3_int64 id = this->get_field_id_from_database();
+            sqlite3_int64 id[2];
+             
+            this->get_field_id_from_database(id);
 
-            if( id > -1)
+            float field[8*8];
+
+            this->get_map_field_at(this->position[0],this->position[1],field);
+
+
+            if( id[0] > -1)
             {
-                float field[8*8];
+                float _field[8*8];
 
-                this->get_field_by_id(id,field);
+                this->get_field_by_id(id[0],_field);
 
-                this->update_map_with_field(this->position[0],this->position[1],field);
+                for(size_t i=0;i<8*8;++i)
+                {
+                    field[i] += _field[i];
+                }
             }
+
+            if( id[1] > -1 )
+            {
+                float _field[8*8];
+
+                this->get_field_by_id(id[1],_field);
+
+                for(size_t i=0;i<8*8;++i)
+                {
+                    field[i] += _field[i];
+                }
+            }
+
+            int32_t divider = (id[0] > -1) + (id[1] > -1);
+
+            if(divider > 0)
+            {
+                for(size_t i=0;i<8*8;++i)
+                {
+                    field[i] /= divider;
+                }
+            }
+
+            this->publish_field(field);
+
+            this->update_map_with_field(this->position[0],this->position[1],field);
 
             // up
             blocks[0] = this->get_map_at(x,y+1);
@@ -545,7 +677,7 @@ class KapiBaraMind : public rclcpp::Node
     }
 
     // get id of field associated to current image, return -1 if not found
-    sqlite3_int64 get_field_id_from_database()
+    void get_field_id_from_database(sqlite3_int64 ids[])
     {
         sqlite3_stmt *stmt;
 
@@ -574,21 +706,66 @@ class KapiBaraMind : public rclcpp::Node
         {
             rowid = sqlite3_column_int64(stmt, 0);
             double distance = sqlite3_column_double(stmt, 1);
+
+            if( distance > 0.01 )
+            {
+                rowid = -1;
+            }
         }
         else
         {
             RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
         }
 
+        ids[0] = rowid;
+
         sqlite3_finalize(stmt);
 
-        return rowid;
+        // now select by laplace image embedding
+
+        rc = sqlite3_prepare_v2(this->db,
+            "SELECT "
+            "  id, "
+            "  distance "
+            "FROM vec_images_laplace "
+            "WHERE images_embedding MATCH ?1 AND k = 3 "
+            "ORDER BY distance "
+            "LIMIT 1 "
+        , -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt, 1, this->laplace_image, sizeof(this->laplace_image), SQLITE_STATIC);
+
+        rc = sqlite3_step(stmt);
+
+        rowid = -1;
+
+        if( rc == SQLITE_ROW )
+        {
+            rowid = sqlite3_column_int64(stmt, 0);
+            double distance = sqlite3_column_double(stmt, 1);
+
+            if( distance > 0.01 )
+            {
+                rowid = -1;
+            }
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
+        }
+
+        ids[1] = rowid;
+
+        sqlite3_finalize(stmt);
 
     }
 
     void get_field_by_id(sqlite3_int64 id, float* field)
     {
-        RCLCPP_INFO(this->get_logger(),"Got field id: %i",id);
+        RCLCPP_INFO(this->get_logger(),"Got field id: %lli",id);
 
         if( id <= -1 )
         {
@@ -674,14 +851,23 @@ class KapiBaraMind : public rclcpp::Node
     {
         // we should check if image is aleardy present in database
 
-        sqlite3_int64 id = this->get_field_id_from_database();
+        sqlite3_int64 id[2];
 
-        RCLCPP_INFO(this->get_logger(),"Got id up database: %i",id);
+        this->get_field_id_from_database(id);
 
-        if( id > -1 )
+        RCLCPP_INFO(this->get_logger(),"Got id up database: %lli,%lli",id[0],id[1]);
+
+        if( id[0] > -1 )
         {
             // update exisiting field
-            this->update_field_with_id(id);
+            this->update_field_with_id(id[0]);
+            return;
+        }
+
+        if( id[1] > -1 )
+        {
+            // update exisiting field
+            this->update_field_with_id(id[1]);
             return;
         }
 
@@ -689,6 +875,7 @@ class KapiBaraMind : public rclcpp::Node
         
         int rc = SQLITE_OK;
 
+        // add new image embedding
         rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
@@ -697,6 +884,24 @@ class KapiBaraMind : public rclcpp::Node
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
         sqlite3_bind_blob(stmt,1,this->image,sizeof(this->image), SQLITE_STATIC);
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_finalize(stmt);
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        // add new image laplace embedding
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_images_laplace(images_embedding) VALUES (?)", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt,1,this->laplace_image,sizeof(this->laplace_image), SQLITE_STATIC);
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
@@ -798,6 +1003,7 @@ class KapiBaraMind : public rclcpp::Node
 
         this->network_timer = this->create_wall_timer(100ms, std::bind(&KapiBaraMind::network_callback, this));
         
+        this->field_publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>("field", 10);
         
     }
 
@@ -857,6 +1063,20 @@ class KapiBaraMind : public rclcpp::Node
         // create vector table if it doesn't exist
 
         rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
+        
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        sqlite3_finalize(stmt);
+
+
+        // create vector table if it doesn't exist
+
+        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images_laplace USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
         
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );

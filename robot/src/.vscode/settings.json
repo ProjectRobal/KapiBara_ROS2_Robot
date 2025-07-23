@@ -10,7 +10,10 @@
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
         "*.pl": "prolog",
-        "functional": "cpp"
+        "functional": "cpp",
+        "array": "cpp",
+        "string_view": "cpp",
+        "rope": "cpp"
     },
     "cmake.sourceDirectory": "/app/src/workspace/sim_build/modus_board_interfaces/modus_board_interfaces__py"
 }
