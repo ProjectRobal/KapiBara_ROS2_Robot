@@ -555,9 +555,32 @@ class EmotionEstimator(Node):
         
         self._face_lock.release()
         
+        # finding wall routine , we search for two white dots caused by IR lights from camera
+        
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        ret,th1 = cv2.threshold(gray,200, 255,cv2.THRESH_BINARY)
+        
+        contours, _ = cv2.findContours(th1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        
+        found_rects:int = 0
+        
+        for i, contour in enumerate(contours):
+            if i == 0:
+                continue
+            
+            x,y,w,h = cv2.boundingRect(contour)
+            
+            if w > 45 and h > 45:
+                found_rects += 1
+        
         self._emotions_lock.acquire()
         
-        self.found_wall = False
+        if found_rects == 2:
+            self.found_wall = True
+            # self.get_logger().info('Found wall!!')
+        else:
+            self.found_wall = False
         
         self._emotions_lock.release()
         
