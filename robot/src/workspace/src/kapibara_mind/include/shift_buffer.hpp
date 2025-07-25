@@ -27,7 +27,7 @@ class ShiftBuffer
 
     void reset();
 
-    T get(size_t i) const;
+    const T& get(size_t i) const;
 
 };
 
@@ -73,7 +73,7 @@ void ShiftBuffer<T,N>::reset()
 }
 
 template<typename T,size_t N>
-T ShiftBuffer<T,N>::get(size_t i) const
+const T& ShiftBuffer<T,N>::get(size_t i) const
 {
     // this->iter is going to be 0 index
 
@@ -89,7 +89,5 @@ T ShiftBuffer<T,N>::get(size_t i) const
         index = N + index;
     }
 
-    T obj = this->buff[ index ];
-
-    return obj;
+    return this->buff[ index ];
 }
