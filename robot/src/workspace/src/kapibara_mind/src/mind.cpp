@@ -117,8 +117,18 @@ struct image_item
     float field[8*8];
 };
 
+struct snapshot
+{
+    float image[90*90];
+    float image_laplace[90*90];
+
+    int32_t x;
+    int32_t y;
+};
+
 class KapiBaraMind : public rclcpp::Node
 {
+    // collect snapshots of images, in some kind of buffers
    
     number map[MAP_WIDTH*MAP_HEIGHT];
 
@@ -126,9 +136,7 @@ class KapiBaraMind : public rclcpp::Node
 
     number orientation[4];
 
-    float image[90*90];
-
-    float laplace_image[90*90];
+    snapshot current_snapshot;
 
     float yaw;
 
@@ -251,6 +259,8 @@ class KapiBaraMind : public rclcpp::Node
         this->position[1] = static_cast<number>(pose.position.y)*STEP_SIZE;
         this->position[2] = static_cast<number>(pose.position.z)*STEP_SIZE;
 
+        this->current_snapshot.x = this->position[0];
+        this->current_snapshot.y = this->position[1];
 
         tf2::Quaternion quat;
 
@@ -368,7 +378,7 @@ class KapiBaraMind : public rclcpp::Node
         {
             for(size_t x=0;x<90;x++)
             {
-                this->image[y*90+x] = static_cast<float>(new_image.at<uint8_t>(x,y))/255.f;
+                this->current_snapshot.image[y*90+x] = static_cast<float>(new_image.at<uint8_t>(x,y))/255.f;
             }
         }
 
@@ -376,7 +386,7 @@ class KapiBaraMind : public rclcpp::Node
         {
             for(size_t x=0;x<90;x++)
             {
-                this->laplace_image[y*90+x] = laplce_img.at<float>(x,y)/255.f;
+                this->current_snapshot.laplace_image[y*90+x] = laplce_img.at<float>(x,y)/255.f;
             }
         }
     }
@@ -490,8 +500,8 @@ class KapiBaraMind : public rclcpp::Node
         // get values of neighbourhood blocks
         number blocks[9];
 
-        int32_t x = this->position[0];
-        int32_t y = this->position[1];
+        int32_t x = this->current_snapshot.x;
+        int32_t y = this->current_snapshot.y;
 
         number yaw = this->yaw;
 
@@ -504,7 +514,7 @@ class KapiBaraMind : public rclcpp::Node
 
             float field[8*8];
 
-            this->get_map_field_at(this->position[0],this->position[1],field);
+            this->get_map_field_at(x,y,field);
 
 
             if( id[0] > -1)
@@ -543,7 +553,7 @@ class KapiBaraMind : public rclcpp::Node
 
             this->publish_field(field);
 
-            this->update_map_with_field(this->position[0],this->position[1],field);
+            this->update_map_with_field(x,y,field);
 
             // up
             blocks[0] = this->get_map_at(x,y+1);
@@ -669,7 +679,7 @@ class KapiBaraMind : public rclcpp::Node
         {
             for(int32_t x=0;x<8;++x)
             {
-                float value = this->get_map_at(this->position[0]+(x-4),this->position[1]+(y-4));
+                float value = this->get_map_at(this->current_snapshot.x+(x-4),this->current_snapshot.y+(y-4));
 
                 field[ y*8 + x ] = value;
             }
@@ -696,7 +706,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt, 1, this->image, sizeof(this->image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 1, this->current_snapshot.image, sizeof(this->current_snapshot.image), SQLITE_STATIC);
 
         rc = sqlite3_step(stmt);
 
@@ -736,7 +746,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt, 1, this->laplace_image, sizeof(this->laplace_image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 1, this->current_snapshot.laplace_image, sizeof(this->current_snapshot.laplace_image), SQLITE_STATIC);
 
         rc = sqlite3_step(stmt);
 
@@ -883,7 +893,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt,1,this->image,sizeof(this->image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt,1,this->current_snapshot.image,sizeof(this->current_snapshot.image), SQLITE_STATIC);
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
@@ -901,7 +911,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt,1,this->laplace_image,sizeof(this->laplace_image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt,1,this->current_snapshot.laplace_image,sizeof(this->current_snapshot.laplace_image), SQLITE_STATIC);
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );

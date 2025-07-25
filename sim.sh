@@ -57,6 +57,10 @@ elif [ "$arg" = "build" ]; then
 
 docker compose -f compose_sim_${VENDOR}.yml build
 
+elif [ "$arg" = "update" ]; then
+
+docker compose -f compose_sim_${VENDOR}.yml exec gazebo /app/cmd/update.sh
+
 elif [ "$arg" = "cmd" ]; then
 
 docker compose -f compose_sim_${VENDOR}.yml exec gazebo /app/cmd/run_cmd.sh "${@:2}"
@@ -98,8 +102,10 @@ else
 echo "start - start a container"
 echo "stop - stop a container"
 echo "compile - build all packages"
+echo "clean - remove build cache"
 echo "purge - remove containers"
 echo "rebuild - build image without caches"
+echo "update - update image dependencies"
 echo "build - build image"
 echo "cmd - run command in working container, in ros2 workspace"
 echo "logs - show container logs"
