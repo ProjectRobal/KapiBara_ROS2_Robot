@@ -45,6 +45,10 @@ elif [ "$arg" = "cmd" ]; then
 
 docker compose -f compose.yml exec robot /app/cmd/run_cmd.sh "${@:2}"
 
+elif [ "$arg" = "update" ]; then
+
+docker compose -f compose.yml exec robot /app/cmd/update.sh
+
 elif [ "$arg" = "logs" ]; then
 
 docker compose -f compose.yml logs robot
@@ -83,6 +87,8 @@ echo "start - start a container"
 echo "stop - stop a container"
 echo "compile - build all packages"
 echo "purge - remove containers"
+echo "update - update image dependencies"
+echo "clean - remove build cache"
 echo "rebuild - build image without caches"
 echo "build - build image"
 echo "cmd - run command in working container, in ros2 workspace"
