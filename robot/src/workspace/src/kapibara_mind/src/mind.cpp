@@ -128,7 +128,7 @@ class KapiBaraMind : public rclcpp::Node
 
     snapshot current_snapshot;
 
-    ShiftBuffer<snapshot,16> snapshots;
+    ShiftBuffer<snapshot,8> snapshots;
 
     float yaw;
 
@@ -661,6 +661,7 @@ class KapiBaraMind : public rclcpp::Node
             this->last_y = y;
 
             this->snapshots.push(this->current_snapshot);
+
         }
 
         number angle_error = this->target_angle - yaw;
