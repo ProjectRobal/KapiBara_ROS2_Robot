@@ -76,6 +76,7 @@
 
 #include "attention.hpp"
 
+#include "shift_buffer.hpp"
 
 #include "block_kac.hpp"
 
@@ -105,17 +106,6 @@ using namespace std::chrono_literals;
 
 #define STEP_SIZE (10.f)
 
-struct vec_image_item
-{
-    sqlite3_int64 id;
-    float image[90*90];
-};
-
-struct image_item
-{
-    sqlite3_int64 id;  
-    float field[8*8];
-};
 
 struct snapshot
 {
@@ -138,6 +128,8 @@ class KapiBaraMind : public rclcpp::Node
 
     snapshot current_snapshot;
 
+    ShiftBuffer<snapshot,16> snapshots;
+
     float yaw;
 
     number yaw_integral;
@@ -148,6 +140,8 @@ class KapiBaraMind : public rclcpp::Node
 
     number last_x;
     number last_y;
+
+    bool wait_for_odom;
 
 
     sqlite3 *db;
@@ -250,6 +244,8 @@ class KapiBaraMind : public rclcpp::Node
     void odometry_callback(const nav_msgs::msg::Odometry::SharedPtr odom)
     {
         RCLCPP_DEBUG(this->get_logger(),"Got odometry message!");
+
+        this->wait_for_odom = false;
 
         // const auto& twist = odom->twist.twist;
 
@@ -386,7 +382,7 @@ class KapiBaraMind : public rclcpp::Node
         {
             for(size_t x=0;x<90;x++)
             {
-                this->current_snapshot.laplace_image[y*90+x] = laplce_img.at<float>(x,y)/255.f;
+                this->current_snapshot.image_laplace[y*90+x] = laplce_img.at<float>(x,y)/255.f;
             }
         }
     }
@@ -395,11 +391,22 @@ class KapiBaraMind : public rclcpp::Node
     {
         RCLCPP_DEBUG(this->get_logger(),"Got emotions message!");
 
-        long double reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
+        float reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
 
         this->last_reward = reward;
 
-        this->set_map_at(this->position[0],this->position[1],reward);
+        // propagate rewards to aleardy visited fields
+        float _reward = reward;
+
+        for(size_t i=0;i<this->snapshots.length();++i)
+        {
+            int32_t x = this->snapshots.get(i).x;
+            int32_t y = this->snapshots.get(i).y;
+
+            this->set_map_at(this->current_snapshot.x,this->current_snapshot.y,_reward);
+
+            _reward*=0.95f;
+        }
     }
 
     void update_map_with_field(int32_t x,int32_t y,float* field)
@@ -496,6 +503,11 @@ class KapiBaraMind : public rclcpp::Node
     void network_callback()
     {
         RCLCPP_INFO(this->get_logger(),"Network fired!");
+
+        if( this->wait_for_odom )
+        {
+            return;
+        }
 
         // get values of neighbourhood blocks
         number blocks[9];
@@ -639,6 +651,8 @@ class KapiBaraMind : public rclcpp::Node
 
             this->last_x = x;
             this->last_y = y;
+
+            this->snapshots.push(this->current_snapshot);
         }
 
         number angle_error = this->target_angle - yaw;
@@ -649,7 +663,7 @@ class KapiBaraMind : public rclcpp::Node
 
             this->yaw_integral += 0.001f*angle_error;
 
-            number angular_velocity = 2.5f*angle_error + 1.f*this->yaw_integral;
+            number angular_velocity = 2.5f*angle_error + 1.5f*this->yaw_integral;
 
             this->send_twist(0.f,angular_velocity);
         }
@@ -669,25 +683,40 @@ class KapiBaraMind : public rclcpp::Node
             }
         }
 
-        this->update_database();
+        for(size_t i=0;i<this->snapshots.length();++i)
+        {
+
+            this->update_database(this->snapshots.get(i));
+
+        }
 
     }
 
-    void get_current_field(float* field)
+    void get_current_field(float* field, const snapshot& snap)
     {
         for(int32_t y=0;y<8;++y)
         {
             for(int32_t x=0;x<8;++x)
             {
-                float value = this->get_map_at(this->current_snapshot.x+(x-4),this->current_snapshot.y+(y-4));
+                float value = this->get_map_at(snap.x+(x-4),snap.y+(y-4));
 
                 field[ y*8 + x ] = value;
             }
         }
     }
 
-    // get id of field associated to current image, return -1 if not found
+    void get_current_field(float* field)
+    {
+        this->get_current_field(field,this->current_snapshot);
+    }
+
     void get_field_id_from_database(sqlite3_int64 ids[])
+    {
+        this->get_field_id_from_database(ids,this->current_snapshot);
+    }
+
+    // get id of field associated to current image, return -1 if not found
+    void get_field_id_from_database(sqlite3_int64 ids[], const snapshot& snap)
     {
         sqlite3_stmt *stmt;
 
@@ -706,7 +735,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt, 1, this->current_snapshot.image, sizeof(this->current_snapshot.image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 1, snap.image, sizeof(snap.image), SQLITE_STATIC);
 
         rc = sqlite3_step(stmt);
 
@@ -746,7 +775,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt, 1, this->current_snapshot.laplace_image, sizeof(this->current_snapshot.laplace_image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 1, snap.image_laplace, sizeof(snap.image_laplace), SQLITE_STATIC);
 
         rc = sqlite3_step(stmt);
 
@@ -829,6 +858,11 @@ class KapiBaraMind : public rclcpp::Node
 
     void update_field_with_id(sqlite3_int64 id)
     {
+        this->update_field_with_id(id,this->current_snapshot);
+    }
+
+    void update_field_with_id(sqlite3_int64 id,const snapshot& snap)
+    {
         int rc = SQLITE_OK;
         sqlite3_stmt *stmt;
 
@@ -841,7 +875,7 @@ class KapiBaraMind : public rclcpp::Node
 
         float field[8*8];
 
-        this->get_current_field(field);
+        this->get_current_field(field,snap);
 
         sqlite3_bind_blob(stmt,1,field,sizeof(field), SQLITE_STATIC);
         sqlite3_bind_int64(stmt,2,id);
@@ -856,28 +890,33 @@ class KapiBaraMind : public rclcpp::Node
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
     }
 
-    // update database with current image embedding and positions 
     void update_database()
+    {
+        this->update_database(this->current_snapshot);
+    }
+
+    // update database with current image embedding and positions 
+    void update_database(const snapshot& snap)
     {
         // we should check if image is aleardy present in database
 
         sqlite3_int64 id[2];
 
-        this->get_field_id_from_database(id);
+        this->get_field_id_from_database(id,snap);
 
         RCLCPP_INFO(this->get_logger(),"Got id up database: %lli,%lli",id[0],id[1]);
 
         if( id[0] > -1 )
         {
             // update exisiting field
-            this->update_field_with_id(id[0]);
+            this->update_field_with_id(id[0],snap);
             return;
         }
 
         if( id[1] > -1 )
         {
             // update exisiting field
-            this->update_field_with_id(id[1]);
+            this->update_field_with_id(id[1],snap);
             return;
         }
 
@@ -893,7 +932,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt,1,this->current_snapshot.image,sizeof(this->current_snapshot.image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt,1,snap.image,sizeof(snap.image), SQLITE_STATIC);
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
@@ -911,7 +950,7 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        sqlite3_bind_blob(stmt,1,this->current_snapshot.laplace_image,sizeof(this->current_snapshot.laplace_image), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt,1,snap.image_laplace,sizeof(snap.image_laplace), SQLITE_STATIC);
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
@@ -925,7 +964,7 @@ class KapiBaraMind : public rclcpp::Node
 
         float field[8*8];
 
-        this->get_current_field(field);
+        this->get_current_field(field,snap);
 
 
         rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
@@ -982,6 +1021,8 @@ class KapiBaraMind : public rclcpp::Node
         this->yaw_integral = 0.f;
 
         this->init_database();
+
+        this->wait_for_odom = true;
 
         // add all required subscriptions
 
