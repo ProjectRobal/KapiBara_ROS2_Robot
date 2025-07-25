@@ -170,6 +170,14 @@ class KapiBaraMind : public rclcpp::Node
 
     long double last_reward;
 
+
+    float max_linear_speed;
+    float max_angular_speed;
+
+    float angular_p;
+    float angular_i;
+
+
     void set_map_at(int32_t x,int32_t y,number value)
     {
         // center the coordinates
@@ -657,13 +665,19 @@ class KapiBaraMind : public rclcpp::Node
 
         number angle_error = this->target_angle - yaw;
 
-        if( abs(angle_error) > 0.1f )
+        if( abs(angle_error) > 0.2f )
         {
             RCLCPP_INFO(this->get_logger(),"Target angle %f, current angle %f",target_angle,yaw);
 
             this->yaw_integral += 0.001f*angle_error;
 
-            number angular_velocity = 2.5f*angle_error + 1.5f*this->yaw_integral;
+            this->yaw_integral = std::min(this->yaw_integral,1.f);
+            this->yaw_integral = std::max(-1.f,this->yaw_integral);
+
+            number angular_velocity = this->angular_p*angle_error + this->angular_i*this->yaw_integral;
+
+            angular_velocity = std::min(this->max_angular_speed,angular_velocity);
+            angular_velocity = std::max(-this->max_angular_speed,angular_velocity);
 
             this->send_twist(0.f,angular_velocity);
         }
@@ -673,7 +687,7 @@ class KapiBaraMind : public rclcpp::Node
 
             RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,blocks[8]);
 
-            this->send_twist(1.f,0.f);
+            this->send_twist(this->max_linear_speed,0.f);
 
             if( x != this->last_x || y != this->last_y )
             {
@@ -1010,9 +1024,14 @@ class KapiBaraMind : public rclcpp::Node
 
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
 
-        this->declare_parameter("max_linear_speed", 0.1f);
+        this->declare_parameter("max_linear_speed", 2.f);
 
-        this->declare_parameter("max_angular_speed", 2.f);
+        this->declare_parameter("max_angular_speed", 3.f);
+
+        this->declare_parameter("angular_p", 4.f);
+
+        this->declare_parameter("angular_i", 2.f);
+
 
         this->last_reward = 0.f;
 
@@ -1023,6 +1042,12 @@ class KapiBaraMind : public rclcpp::Node
         this->init_database();
 
         this->wait_for_odom = true;
+
+        this->max_linear_speed = this->get_parameter("max_linear_speed").as_double();
+        this->max_angular_speed = this->get_parameter("max_angular_speed").as_double();
+
+        this->angular_p = this->get_parameter("angular_p").as_double();
+        this->angular_i = this->get_parameter("angular_i").as_double();;
 
         // add all required subscriptions
 
