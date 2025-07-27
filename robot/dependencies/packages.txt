@@ -6,8 +6,6 @@ python3-scipy
 libfftw3-dev
 libsqlite3-dev
 ros-humble-ros-base
-ros-humble-gazebo-ros-pkgs
-ros-humble-gazebo-msgs
 ros-humble-rmw-cyclonedds-cpp
 ros-humble-rviz2
 ros-humble-joint-state-publisher-gui

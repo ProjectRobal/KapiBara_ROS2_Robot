@@ -397,7 +397,7 @@ class KapiBaraMind : public rclcpp::Node
 
     void emotions_callback(const kapibara_interfaces::msg::Emotions::SharedPtr emotions)
     {
-        RCLCPP_DEBUG(this->get_logger(),"Got emotions message!");
+        RCLCPP_INFO(this->get_logger(),"Got emotions message!");
 
         float reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
 
@@ -668,7 +668,7 @@ class KapiBaraMind : public rclcpp::Node
 
         if( abs(angle_error) > 0.2f )
         {
-            RCLCPP_INFO(this->get_logger(),"Target angle %f, current angle %f",target_angle,yaw);
+            RCLCPP_INFO(this->get_logger(),"Target angle %f, current angle %f",this->target_angle,yaw);
 
             this->yaw_integral += 0.001f*angle_error;
 
@@ -686,12 +686,14 @@ class KapiBaraMind : public rclcpp::Node
         {
             this->yaw_integral = 0.f;
 
-            RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,blocks[8]);
+            RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,this->get_map_at(this->last_x,this->last_y));
 
             this->send_twist(this->max_linear_speed,0.f);
 
             if( x != this->last_x || y != this->last_y )
             {
+
+                RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,this->get_map_at(x,y));
 
                 this->moving_to_block = false;
 
@@ -1065,7 +1067,7 @@ class KapiBaraMind : public rclcpp::Node
       "spectogram", 10, std::bind(&KapiBaraMind::spectogram_callback, this, _1));
 
       this->image_subscription = this->create_subscription<sensor_msgs::msg::CompressedImage>(
-      "kapibara_camera/image_raw/compressed", 10, std::bind(&KapiBaraMind::image_callback, this, _1));
+      "camera/image_raw/compressed", 10, std::bind(&KapiBaraMind::image_callback, this, _1));
 
         this->emotions_subscription = this->create_subscription<kapibara_interfaces::msg::Emotions>(
       "emotions", 10, std::bind(&KapiBaraMind::emotions_callback, this, _1));

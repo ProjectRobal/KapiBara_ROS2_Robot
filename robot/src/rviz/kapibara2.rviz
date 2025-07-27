@@ -6,7 +6,6 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /RobotModel1
         - /PointCloud21
       Splitter Ratio: 0.6912621259689331
     Tree Height: 676
@@ -60,95 +59,8 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /KapiBara/robot_description
-      Enabled: true
+      Enabled: false
       Links:
-        /KapiBara/base:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        /KapiBara/camera:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/camera_optical:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        /KapiBara/chassis:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/front_left_laser_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/front_right_laser_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/imu_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        /KapiBara/left_ear:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/left_wheel1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/left_wheel2:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/left_wheel3:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/righ_ear:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/right_wheel1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/right_wheel2:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/right_wheel3:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/side_left_laser_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        /KapiBara/side_right_laser_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
@@ -160,7 +72,7 @@ Visualization Manager:
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0
-      Value: true
+      Value: false
       Visual Enabled: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -242,7 +154,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.2832146883010864
+      Distance: 16.214141845703125
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -257,10 +169,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.20020252466201782
+      Pitch: 0.8997973203659058
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.1885550022125244
+      Yaw: 0.753555417060852
     Saved: ~
 Window Geometry:
   Displays:
@@ -278,5 +190,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1219
-  X: 904
+  X: 701
   Y: 0
