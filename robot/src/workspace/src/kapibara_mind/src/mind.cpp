@@ -111,6 +111,7 @@ struct snapshot
 {
     float image[90*90];
     float image_laplace[90*90];
+    float spectogram[90*90];
 
     int32_t x;
     int32_t y;
@@ -335,7 +336,7 @@ class KapiBaraMind : public rclcpp::Node
 
         cv::Mat spectogram;
 
-        resize(image, spectogram, cv::Size(16, 16), cv::INTER_LINEAR); 
+        resize(image, spectogram, cv::Size(90, 90), cv::INTER_LINEAR); 
 
         size_t iter = 426;
 
@@ -346,6 +347,15 @@ class KapiBaraMind : public rclcpp::Node
         //         this->inputs[iter++] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
         //     }
         // }
+
+        for(size_t y=0;y<90;y++)
+        {
+            for(size_t x=0;x<90;x++)
+            {
+                this->current_snapshot.spectogram[y*90+x] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
+            }
+        }
+
     }
 
     void image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr img)
@@ -528,7 +538,7 @@ class KapiBaraMind : public rclcpp::Node
         if( !this->moving_to_block )
         {
 
-            sqlite3_int64 id[2];
+            sqlite3_int64 id[3];
              
             this->get_field_id_from_database(id);
 
@@ -561,7 +571,19 @@ class KapiBaraMind : public rclcpp::Node
                 }
             }
 
-            int32_t divider = (id[0] > -1) + (id[1] > -1);
+            if( id[2] > -1 )
+            {
+                float _field[8*8];
+
+                this->get_field_by_id(id[2],_field);
+
+                for(size_t i=0;i<8*8;++i)
+                {
+                    field[i] += _field[i];
+                }
+            }
+
+            int32_t divider = (id[0] > -1) + (id[1] > -1) + (id[2] > -1);
 
             if(divider > 0)
             {
@@ -817,6 +839,47 @@ class KapiBaraMind : public rclcpp::Node
 
         sqlite3_finalize(stmt);
 
+
+        // now select by spectogram embedding
+
+        rc = sqlite3_prepare_v2(this->db,
+            "SELECT "
+            "  id, "
+            "  distance "
+            "FROM vec_spectogram "
+            "WHERE images_embedding MATCH ?1 AND k = 3 "
+            "ORDER BY distance "
+            "LIMIT 1 "
+        , -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt, 1, snap.spectogram, sizeof(snap.spectogram), SQLITE_STATIC);
+
+        rc = sqlite3_step(stmt);
+
+        rowid = -1;
+
+        if( rc == SQLITE_ROW )
+        {
+            rowid = sqlite3_column_int64(stmt, 0);
+            double distance = sqlite3_column_double(stmt, 1);
+
+            if( distance > 0.01 )
+            {
+                rowid = -1;
+            }
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
+        }
+
+        ids[2] = rowid;
+
+        sqlite3_finalize(stmt);
+
     }
 
     void get_field_by_id(sqlite3_int64 id, float* field)
@@ -917,11 +980,11 @@ class KapiBaraMind : public rclcpp::Node
     {
         // we should check if image is aleardy present in database
 
-        sqlite3_int64 id[2];
+        sqlite3_int64 id[3];
 
         this->get_field_id_from_database(id,snap);
 
-        RCLCPP_INFO(this->get_logger(),"Got id up database: %lli,%lli",id[0],id[1]);
+        RCLCPP_INFO(this->get_logger(),"Got id up database: %lli,%lli,%lli",id[0],id[1],id[2]);
 
         if( id[0] > -1 )
         {
@@ -934,6 +997,13 @@ class KapiBaraMind : public rclcpp::Node
         {
             // update exisiting field
             this->update_field_with_id(id[1],snap);
+            return;
+        }
+
+        if( id[2] > -1 )
+        {
+            // update exisiting field
+            this->update_field_with_id(id[2],snap);
             return;
         }
 
@@ -968,6 +1038,24 @@ class KapiBaraMind : public rclcpp::Node
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
         sqlite3_bind_blob(stmt,1,snap.image_laplace,sizeof(snap.image_laplace), SQLITE_STATIC);
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_finalize(stmt);
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        // add new image spectogram embedding
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_spectogram(images_embedding) VALUES (?)", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_blob(stmt,1,snap.spectogram,sizeof(snap.spectogram), SQLITE_STATIC);
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
@@ -1153,9 +1241,22 @@ class KapiBaraMind : public rclcpp::Node
         sqlite3_finalize(stmt);
 
 
-        // create vector table if it doesn't exist
+        // create vector table if it doesn't exist ( laplace image )
 
         rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images_laplace USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
+        
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        sqlite3_finalize(stmt);
+
+        // create vector table if it doesn't exist ( spectograms )
+
+        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_spectograms USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
         
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
