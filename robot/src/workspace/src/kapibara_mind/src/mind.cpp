@@ -80,9 +80,25 @@
 
 #include "block_kac.hpp"
 
+#include "common_types.hpp"
+
 size_t snn::BlockCounter::BlockID = 0;
 
 size_t snn::LayerCounter::LayerIDCounter = 0;
+
+/*
+    
+    Now robot will collect points in 2D space into SQLite database, and assigns them to bags which will have id.
+
+    Now there will be also Encoder AI model that will convert sensory data into specific bag id.
+
+    The robot will use this bag id to retrieve points from database and use them to calculate forces in 2D space.
+
+    We should decide whether point should go to bag or not. My idea is to keep track of past added points and  
+    check distance between new and old point.
+
+    How to generate embeddings for encoder? Use randomly generated values or go fully unsuprevised learning.
+*/
 
 
 using std::placeholders::_1;
@@ -98,13 +114,13 @@ using namespace std::chrono_literals;
 
 // Behavioral map size
 
-#define MAP_WIDTH (8192)
-
-#define MAP_HEIGHT (8192)
-
-#define MAP_SIZE MAP_WIDTH*MAP_HEIGHT
-
 #define STEP_SIZE (10.f)
+
+
+#define LINEAR_FORCE_COF (10.f)
+
+#define ANGULAR_FORCE_COF (50.f)
+
 
 
 struct snapshot
@@ -117,11 +133,14 @@ struct snapshot
     int32_t y;
 };
 
+
+
+
 class KapiBaraMind : public rclcpp::Node
 {
     // collect snapshots of images, in some kind of buffers
    
-    number map[MAP_WIDTH*MAP_HEIGHT];
+    std::vector<point> map_points;
 
     number position[3];
 
@@ -130,20 +149,6 @@ class KapiBaraMind : public rclcpp::Node
     snapshot current_snapshot;
 
     ShiftBuffer<snapshot,8> snapshots;
-
-    float yaw;
-
-    number yaw_integral;
-
-    number target_angle;
-
-    bool moving_to_block;
-
-    number last_x;
-    number last_y;
-
-    bool wait_for_odom;
-
 
     sqlite3 *db;
 
@@ -171,6 +176,8 @@ class KapiBaraMind : public rclcpp::Node
 
     long double last_reward;
 
+    double yaw;
+
 
     float max_linear_speed;
     float max_angular_speed;
@@ -178,40 +185,52 @@ class KapiBaraMind : public rclcpp::Node
     float angular_p;
     float angular_i;
 
+    double integral;
 
-    void set_map_at(int32_t x,int32_t y,number value)
+    uint64_t current_bag_id;
+
+    // Add new point to databse if point at current coordinates exists, replace it
+    // If no bag is selected create new one.
+    void add_point_to_database(point pt)
     {
-        // center the coordinates
+        // add point to database
 
-        x += (MAP_WIDTH/2);
-        y += (MAP_HEIGHT/2);
+        
 
-        size_t offset = MAP_WIDTH*y + x;
-
-        if( offset >= MAP_SIZE )
-        {
-            return;
-        }
-
-        this->map[ offset ] = value;
+        this->add_point_to_bag(pt);
     }
 
-    number get_map_at(int32_t x,int32_t y)
+    // Create a new bag and get it's id and hold it to current_bag_id
+    void create_new_bag()
     {
-        // center the coordinates
 
-        x += (MAP_WIDTH/2);
-        y += (MAP_HEIGHT/2);
-
-        size_t offset = MAP_WIDTH*y + x;
-
-        if( offset >= MAP_SIZE )
-        {
-            return 0;
-        }
-
-        return this->map[offset];
     }
+
+    // add a point to a bag, if point is to far away from lastly added point new bag is created
+    void add_point_to_bag(point pt)
+    {
+
+        
+    }
+
+    // update point in database, if point with id exists, update it
+    void update_point_in_database(point pt,uint64_t id)
+    {
+
+    }
+
+    // takes current snapshot and use encoders or just database to retrive points to map
+    void retrive_points()
+    {
+
+    }
+
+    // add point to map, if point with coordinates exists, replace it
+    void add_point_to_map(point pt)
+    {
+
+    }
+
 
     void stop_mind_handle(const std::shared_ptr<kapibara_interfaces::srv::StopMind::Request> request,
         std::shared_ptr<kapibara_interfaces::srv::StopMind::Response> response)
@@ -253,8 +272,6 @@ class KapiBaraMind : public rclcpp::Node
     void odometry_callback(const nav_msgs::msg::Odometry::SharedPtr odom)
     {
         RCLCPP_DEBUG(this->get_logger(),"Got odometry message!");
-
-        this->wait_for_odom = false;
 
         // const auto& twist = odom->twist.twist;
 
@@ -421,337 +438,84 @@ class KapiBaraMind : public rclcpp::Node
             int32_t x = this->snapshots.get(i).x;
             int32_t y = this->snapshots.get(i).y;
 
-            this->set_map_at(this->current_snapshot.x,this->current_snapshot.y,_reward);
+            if( abs(reward) > 0.1f )
+            {
+                // add point to map
+                
+            }
+
+            // maybe let's use sqlite database to stroe points
 
             _reward*=0.95f;
         }
     }
 
-    void update_map_with_field(int32_t x,int32_t y,float* field)
-    {
-        for(size_t _y=0;_y<8;_y++)
-        {
-            for(size_t _x=0;_x<8;_x++)
-            {
-                float val = field[_y*8 + _x];
-
-                this->set_map_at(x+(_x-4),y+(_y-4),val);
-            }
-        }
-    }
-
-    void get_map_field_at(int32_t x,int32_t y,float* field)
-    {
-        for(size_t _y=0;_y<8;_y++)
-        {
-            for(size_t _x=0;_x<8;_x++)
-            {
-                float val = field[_y*8 + _x];
-
-                field[_y*8 + _x] = this->get_map_at(x+(_x-4),y+(_y-4));
-            }
-        }
-    }
-
-    void publish_field(float field[])
-    {
-        sensor_msgs::msg::PointCloud2 msg;
-        msg.header.stamp = this->get_clock()->now();
-        msg.header.frame_id = "KapiBara/odom";
-
-        // Define the point cloud fields
-        msg.fields.resize(3);
-        msg.fields[0].name = "x";
-        msg.fields[0].offset = 0;
-        msg.fields[0].datatype = sensor_msgs::msg::PointField::FLOAT32;
-        msg.fields[0].count = 1;
-
-        msg.fields[1].name = "y";
-        msg.fields[1].offset = 4;
-        msg.fields[1].datatype = sensor_msgs::msg::PointField::FLOAT32;
-        msg.fields[1].count = 1;
-
-        msg.fields[2].name = "z";
-        msg.fields[2].offset = 8;
-        msg.fields[2].datatype = sensor_msgs::msg::PointField::FLOAT32;
-        msg.fields[2].count = 1;
-
-        msg.point_step = 12;
-        
-        // Create an 8x8 grid of points
-        int grid_size = 8;
-        double resolution = 0.25; // Distance between points
-        
-        // Calculate the total number of bytes needed for the point data
-        msg.row_step = grid_size * msg.point_step; // Bytes per row (width * point_step)
-        msg.data.resize(grid_size * grid_size * msg.point_step); // Total data size
-
-        // Use a pointer to fill the data directly
-        // This is more efficient than pushing back individual bytes
-        unsigned char *cloud_data_ptr = msg.data.data();
-
-        for (int i = 0; i < grid_size; ++i)
-        {
-            for (int j = 0; j < grid_size; ++j)
-            {
-                float x = static_cast<float>(i * resolution - (grid_size * resolution / 2.0)); // Center the grid
-                float y = static_cast<float>(j * resolution - (grid_size * resolution / 2.0));
-                
-                // Copy x, y, z into the data buffer
-                // This assumes little-endian system, which is common.
-                // If portability across different endian systems is critical,
-                // you might need to handle byte swapping explicitly.
-                std::memcpy(cloud_data_ptr, &x, sizeof(float));
-                cloud_data_ptr += sizeof(float);
-                std::memcpy(cloud_data_ptr, &y, sizeof(float));
-                cloud_data_ptr += sizeof(float);
-                std::memcpy(cloud_data_ptr, &field[i*8 + j], sizeof(float));
-                cloud_data_ptr += sizeof(float);
-            }
-        }
-
-        msg.width = grid_size;
-        msg.height = grid_size; // For a 2D point cloud, height > 1 is valid
-        msg.is_bigendian = false; // Most systems are little-endian
-        msg.is_dense = true;      // No invalid points
-
-        this->field_publisher->publish(msg);
-    }
 
     void network_callback()
     {
         RCLCPP_INFO(this->get_logger(),"Network fired!");
 
-        if( this->wait_for_odom )
+        const double time_stamp = 0.1f;
+
+        // retrive bags based on current sensory input
+        
+
+        // get current position
+        double x = this->current_snapshot.x;
+        double y = this->current_snapshot.y;
+
+        // linear forces
+
+        double x_force = 0.f;
+        double y_force = 0.f;
+
+        // iterate over all points in the map
+        for(size_t i=0;i<this->map_points.size();++i)
         {
+            const point& pt = this->map_points[i];
+
+            // calculate distance to point
+            double dx = static_cast<double>(pt.x) - x;
+            double dy = static_cast<double>(pt.y) - y;
+
+            double distance2 = dx*dx + dy*dy;
+
+            double force = LINEAR_FORCE_COF / (distance2 + 1e-6);
+            
+            double angle = std::atan2(dy, dx);
+
+            x_force += force * std::cos(angle);
+            y_force += force * std::sin(angle);
+        }
+
+        double target_angle = std::atan2(y_force, x_force);
+
+        double angle_error = target_angle - this->yaw;
+
+        if( abs(angle_error) > 0.1)
+        {
+            this->integral += angle_error*time_stamp;
+
+            this->integral = std::clamp<double>(this->integral, -this->max_angular_speed, this->max_angular_speed);
+
+            double angular_speed = this->angular_p * angle_error + this->angular_i * this->integral;
+
+            this->send_twist(0.f, std::clamp<double>(angular_speed, -this->max_angular_speed, this->max_angular_speed));
+
             return;
         }
 
-        // get values of neighbourhood blocks
-        number blocks[9];
+        // use 10 Hz
 
-        int32_t x = this->current_snapshot.x;
-        int32_t y = this->current_snapshot.y;
+        this->integral = 0.f;
 
-        number yaw = this->yaw;
+        double force = x_force*x_force + y_force*y_force;
 
-        if( !this->moving_to_block )
-        {
+        this->send_twist(
+            std::clamp<double>(force*0.125f, 0.f, this->max_linear_speed),
+            0.f
+        );
 
-            sqlite3_int64 id[3];
-             
-            this->get_field_id_from_database(id);
-
-            float field[8*8];
-
-            this->get_map_field_at(x,y,field);
-
-
-            if( id[0] > -1)
-            {
-                float _field[8*8];
-
-                this->get_field_by_id(id[0],_field);
-
-                for(size_t i=0;i<8*8;++i)
-                {
-                    field[i] += _field[i];
-                }
-            }
-
-            if( id[1] > -1 )
-            {
-                float _field[8*8];
-
-                this->get_field_by_id(id[1],_field);
-
-                for(size_t i=0;i<8*8;++i)
-                {
-                    field[i] += _field[i];
-                }
-            }
-
-            if( id[2] > -1 )
-            {
-                float _field[8*8];
-
-                this->get_field_by_id(id[2],_field);
-
-                for(size_t i=0;i<8*8;++i)
-                {
-                    field[i] += _field[i];
-                }
-            }
-
-            int32_t divider = (id[0] > -1) + (id[1] > -1) + (id[2] > -1);
-
-            if(divider > 0)
-            {
-                for(size_t i=0;i<8*8;++i)
-                {
-                    field[i] /= divider;
-                }
-            }
-
-            this->publish_field(field);
-
-            this->update_map_with_field(x,y,field);
-
-            // up
-            blocks[0] = this->get_map_at(x,y+1);
-
-            // up,right
-            blocks[1] = this->get_map_at(x-1,y+1);
-
-            // right
-            blocks[2] = this->get_map_at(x-1,y);
-
-            // down, right
-            blocks[3] = this->get_map_at(x-1,y-1);
-
-            // down
-            blocks[4] = this->get_map_at(x,y-1);
-
-            // down, left
-            blocks[5] = this->get_map_at(x+1,y-1);
-
-            // left
-            blocks[6] = this->get_map_at(x+1,y);
-
-            // up,left
-            blocks[7] = this->get_map_at(x+1,y+1);
-
-            // center
-            blocks[8] = this->get_map_at(x,y);
-
-            number max_blocks = blocks[0];
-
-            size_t max_i = 0;
-
-            number sum = 0.f;
-
-            // calculate probability of moving to a field
-            for(size_t i=0;i<9;++i)
-            {
-                blocks[i] = std::exp(blocks[i]);
-
-                sum += blocks[i];
-            }
-
-            for(size_t i=0;i<9;++i)
-            {
-                blocks[i] /= sum;
-            }
-
-
-            // select based on probability
-            snn::UniformInit<0.f,1.f> dice;
-
-            number dice_shot = dice.init();
-
-            number thre = 0.f;
-
-            for(size_t i=0;i<9;++i)
-            {
-                thre += blocks[i];
-
-                if( thre >= dice_shot )
-                {
-                    max_i = i;
-                    break;
-                }
-            }
-
-            // robot stay in place
-
-            RCLCPP_INFO(this->get_logger(),"Current block: %f",blocks[8]);
-
-            if( max_i == 8 )
-            {
-                this->yaw_integral = 0.f;
-                RCLCPP_INFO(this->get_logger(),"Robot stay in place!");
-                return;
-            }
-
-            RCLCPP_INFO(this->get_logger(),"Next block: %f",blocks[max_i]);
-
-            this->target_angle = static_cast<number>(max_i) * (M_PI/4.f) - (M_PI);
-
-            this->moving_to_block = true;
-
-            this->last_x = x;
-            this->last_y = y;
-
-            this->snapshots.push(this->current_snapshot);
-
-        }
-
-        number angle_error = this->target_angle - yaw;
-
-        if( abs(angle_error) > 0.2f )
-        {
-            RCLCPP_INFO(this->get_logger(),"Target angle %f, current angle %f",this->target_angle,yaw);
-
-            this->yaw_integral += 0.001f*angle_error;
-
-            this->yaw_integral = std::min(this->yaw_integral,1.f);
-            this->yaw_integral = std::max(-1.f,this->yaw_integral);
-
-            number angular_velocity = this->angular_p*angle_error + this->angular_i*this->yaw_integral;
-
-            angular_velocity = std::min(this->max_angular_speed,angular_velocity);
-            angular_velocity = std::max(-this->max_angular_speed,angular_velocity);
-
-            this->send_twist(0.f,angular_velocity);
-        }
-        else
-        {
-            this->yaw_integral = 0.f;
-
-            RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,this->get_map_at(this->last_x,this->last_y));
-
-            this->send_twist(this->max_linear_speed,0.f);
-
-            if( x != this->last_x || y != this->last_y )
-            {
-
-                RCLCPP_INFO(this->get_logger(),"Moving forward, position: %i %i , current block: %f",x,y,this->get_map_at(x,y));
-
-                this->moving_to_block = false;
-
-            }
-        }
-
-        for(size_t i=0;i<this->snapshots.length();++i)
-        {
-
-            this->update_database(this->snapshots.get(i));
-
-        }
-
-    }
-
-    void get_current_field(float* field, const snapshot& snap)
-    {
-        for(int32_t y=0;y<8;++y)
-        {
-            for(int32_t x=0;x<8;++x)
-            {
-                float value = this->get_map_at(snap.x+(x-4),snap.y+(y-4));
-
-                field[ y*8 + x ] = value;
-            }
-        }
-    }
-
-    void get_current_field(float* field)
-    {
-        this->get_current_field(field,this->current_snapshot);
-    }
-
-    void get_field_id_from_database(sqlite3_int64 ids[])
-    {
-        this->get_field_id_from_database(ids,this->current_snapshot);
     }
 
     // get id of field associated to current image, return -1 if not found
@@ -953,9 +717,10 @@ class KapiBaraMind : public rclcpp::Node
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
-        float field[8*8];
+        float field[8*8] = {0.f};
 
-        this->get_current_field(field,snap);
+        // to do
+        // this->get_current_field(field,snap);s
 
         sqlite3_bind_blob(stmt,1,field,sizeof(field), SQLITE_STATIC);
         sqlite3_bind_int64(stmt,2,id);
@@ -1067,9 +832,10 @@ class KapiBaraMind : public rclcpp::Node
 
         // get field 
 
-        float field[8*8];
+        float field[8*8] = {0.f};
 
-        this->get_current_field(field,snap);
+        // to do
+        // this->get_current_field(field,snap);
 
 
         rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
@@ -1092,27 +858,11 @@ class KapiBaraMind : public rclcpp::Node
         
     }
 
-    void init_map()
-    {
-        // we will load map from file but by default we will initialize it with random data
-
-        // snn::GaussInit<0.f,1.f> gauss;
-
-        for(size_t i=0;i<MAP_SIZE;++i)
-        {
-            this->map[i] = 0.f;
-        }
-    }
-
     public:
 
     KapiBaraMind()
     : Node("kapibara_mind")
     {
-        this->target_angle = 0.f;
-
-        this->moving_to_block = false;
-
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
 
         this->declare_parameter("max_linear_speed", 2.f);
@@ -1126,13 +876,9 @@ class KapiBaraMind : public rclcpp::Node
 
         this->last_reward = 0.f;
 
-        this->init_map();
-
-        this->yaw_integral = 0.f;
+        this->integral = 0.0;
 
         this->init_database();
-
-        this->wait_for_odom = true;
 
         this->max_linear_speed = this->get_parameter("max_linear_speed").as_double();
         this->max_angular_speed = this->get_parameter("max_angular_speed").as_double();
@@ -1185,16 +931,6 @@ class KapiBaraMind : public rclcpp::Node
         this->twist_publisher->publish(twist);
     }
 
-    void dump_map()
-    {
-        std::fstream file;
-
-        file.open("behv_map.map",std::ios::binary|std::ios::out);
-
-        file.write((char*)&this->map,sizeof(this->map));
-
-        file.close();
-    }
 
     void stop_motors()
     {
@@ -1223,61 +959,73 @@ class KapiBaraMind : public rclcpp::Node
         rc = sqlite3_open("mind_database.db", &db);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
 
         sqlite3_stmt *stmt;
 
         // create vector table if it doesn't exist
 
+        RCLCPP_INFO(this->get_logger(),"Creating database tables...");
+
+        RCLCPP_INFO(this->get_logger(),"Creating vec_images database...");
+
         rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
         
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         sqlite3_finalize(stmt);
 
 
         // create vector table if it doesn't exist ( laplace image )
 
+        RCLCPP_INFO(this->get_logger(),"Creating vec_images_laplace database...");
+
         rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images_laplace USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
         
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         sqlite3_finalize(stmt);
 
         // create vector table if it doesn't exist ( spectograms )
+        RCLCPP_INFO(this->get_logger(),"Creating spectogram database...");
 
         rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_spectograms USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
         
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        sqlite3_finalize(stmt);
+
+        // create table for points
+        RCLCPP_INFO(this->get_logger(),"Creating point database...");
+
+        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS vec_points(id INTEGER PRIMARY KEY,emotion_state FLOAT,position FLOAT[3])", -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         sqlite3_finalize(stmt);
 
-        // create table if it doesn't exist
-        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS images(id INTEGER PRIMARY KEY,field FLOAT[64])", -1, &stmt, NULL);
+        // create table for bags
+        RCLCPP_INFO(this->get_logger(),"Creating bags database...");
+
+        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS vec_bag(id INTEGER PRIMARY KEY,embeddings FLOAT[64])", -1, &stmt, NULL);
+
         this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         rc = sqlite3_step(stmt);
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt);
-
+        sqlite3_finalize(stmt); 
 
     }
 
@@ -1289,7 +1037,6 @@ class KapiBaraMind : public rclcpp::Node
     ~KapiBaraMind()
     {
         this->close_database();
-        this->dump_map();
     }   
 
 };
