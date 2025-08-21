@@ -21,7 +21,7 @@ RUN apt install software-properties-common -y
 
 RUN apt install -y curl gnupg2 lsb-release
 
-RUN apt install ros-humble-gazebo-ros-pkgs ros-humble-gazebo-msgs
+RUN apt install ros-humble-gazebo-ros-pkgs ros-humble-gazebo-msgs -y
 
 RUN apt update
 
