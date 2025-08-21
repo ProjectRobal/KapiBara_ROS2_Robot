@@ -189,37 +189,175 @@ class KapiBaraMind : public rclcpp::Node
 
     uint64_t current_bag_id;
 
+    bool check_for_point(point pt,uint64_t& id)
+    {
+        sqlite3_stmt *stmt;
+
+        int rc = SQLITE_OK;
+
+        rc = sqlite3_prepare_v2(this->db,
+            "SELECT "
+            "  id, "
+            "  distance "
+            "FROM vec_points "
+            "WHERE position MATCH ?1 AND k = 3 "
+            "ORDER BY distance "
+            "LIMIT 1 "
+        , -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        float position[3] = {pt.x,pt.y,pt.w};
+
+        sqlite3_bind_blob(stmt, 1, position, sizeof(position), SQLITE_STATIC);
+
+        rc = sqlite3_step(stmt);
+
+        sqlite3_int64 rowid = -1;
+
+        if( rc == SQLITE_ROW )
+        {
+            rowid = sqlite3_column_int64(stmt, 0);
+            double distance = sqlite3_column_double(stmt, 1);
+
+            if( distance > 0.01 )
+            {
+                rowid = -1;
+            }
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
+        }
+
+        sqlite3_finalize(stmt);
+
+        id = rowid;
+        
+        return rowid != -1;
+    }
+
     // Add new point to databse if point at current coordinates exists, replace it
     // If no bag is selected create new one.
     void add_point_to_database(point pt)
     {
+        // check if point aleardy exits
+
+        uint64_t point_id = 0;
+
+        if(check_for_point(pt,point_id))
+        {
+            RCLCPP_INFO(this->get_logger(),"Updating exisiting point at x: %i y: %i",pt.x,pt.y);
+            this->update_point_in_database(pt,point_id);
+            return;
+        }
+
+
         // add point to database
+        RCLCPP_INFO(this->get_logger(),"Adding new point at x: %i y: %i",pt.x,pt.y);
 
+        sqlite3_stmt *stmt;
         
+        int rc = SQLITE_OK;
 
-        this->add_point_to_bag(pt);
+        // add new point to database
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_points(emotion_state,position) VALUES (?)", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        float position[3] = {pt.x,pt.y,pt.w};
+
+        sqlite3_bind_double(stmt,1,pt.emotion_state);
+
+        sqlite3_bind_blob(stmt,2,position,sizeof(position), SQLITE_STATIC);
+
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        uint64_t inserted_point_id = sqlite3_last_insert_rowid(this->db);
+
+        this->add_point_to_bag(pt,inserted_point_id);
     }
 
     // Create a new bag and get it's id and hold it to current_bag_id
     void create_new_bag()
     {
-
+        // how to generate embedding for bag?
     }
 
     // add a point to a bag, if point is to far away from lastly added point new bag is created
-    void add_point_to_bag(point pt)
+    void add_point_to_bag(point pt,uint64_t point_id)
     {
 
+        if( this->current_bag_id == 0 )
+        {
+            this->create_new_bag();
+        }
+        
+        sqlite3_stmt *stmt;
+
+        int rc = SQLITE_OK;
+
+        // add new point to database
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        rc = sqlite3_prepare_v2(this->db, "INSERT INTO bag_point(emotion_state,bag_id,point_id) VALUES (?)", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_int64(stmt,1,this->current_bag_id);
+        sqlite3_bind_int64(stmt,2,point_id);
+
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        rc = sqlite3_exec(this->db, "END", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
         
     }
 
     // update point in database, if point with id exists, update it
     void update_point_in_database(point pt,uint64_t id)
     {
+        int rc = SQLITE_OK;
+        sqlite3_stmt *stmt;
 
+        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_prepare_v2(this->db, "UPDATE vec_points SET emotion_state = ? WHERE id = ?", -1, &stmt, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_bind_double(stmt,1,pt.emotion_state);
+        sqlite3_bind_int64(stmt,2,id);
+
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+
+        sqlite3_finalize(stmt);
+        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
     }
 
     // takes current snapshot and use encoders or just database to retrive points to map
+    // save current bag id
     void retrive_points()
     {
 
@@ -228,7 +366,7 @@ class KapiBaraMind : public rclcpp::Node
     // add point to map, if point with coordinates exists, replace it
     void add_point_to_map(point pt)
     {
-
+        // use quad tree to check if point exists in map
     }
 
 
@@ -873,6 +1011,7 @@ class KapiBaraMind : public rclcpp::Node
 
         this->declare_parameter("angular_i", 2.f);
 
+        this->current_bag_id = 0;
 
         this->last_reward = 0.f;
 
@@ -1019,6 +1158,18 @@ class KapiBaraMind : public rclcpp::Node
         RCLCPP_INFO(this->get_logger(),"Creating bags database...");
 
         rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS vec_bag(id INTEGER PRIMARY KEY,embeddings FLOAT[64])", -1, &stmt, NULL);
+
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        rc = sqlite3_step(stmt);
+        this->validate_sqlite(rc);
+        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
+        sqlite3_finalize(stmt); 
+
+        // create table for holding pair of bag and point
+        RCLCPP_INFO(this->get_logger(),"Creating bags and point relation database...");
+
+        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS bag_point(id INTEGER PRIMARY KEY,bag_id INTEGER,point_id INTEGER)", -1, &stmt, NULL);
 
         this->validate_sqlite(rc);
         assert( rc == SQLITE_OK || rc == SQLITE_DONE );
