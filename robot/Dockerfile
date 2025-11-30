@@ -9,7 +9,7 @@ COPY ./dependencies /app/dep
 
 COPY ./debs /debs
 
-RUN apt update
+RUN apt update -y
 
 RUN apt install software-properties-common -y
 
@@ -54,7 +54,7 @@ RUN echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" |
 
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 
-RUN apt update
+RUN apt update -y
 
 RUN apt install devscripts debhelper dkms  -y
 
