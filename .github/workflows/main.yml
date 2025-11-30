@@ -47,7 +47,7 @@ jobs:
         with:
           platforms: linux/arm64
           file: robot/Dockerfile
-          context: .
+          context: robot
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
