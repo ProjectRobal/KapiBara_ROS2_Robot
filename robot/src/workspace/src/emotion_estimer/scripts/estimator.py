@@ -57,10 +57,119 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallb
 
 from emotion_estimer.face_data import FaceData,FaceObj
 
+import webrtcvad
 
-from tiny_vectordb import VectorDatabase
+import sqlite3
+import sqlite_vec
+
 
 FACE_TOLERANCE = 0.94
+
+
+class FaceSqlite:
+    
+    def __init__(self) -> None:
+        
+        self.db = sqlite3.connect("faces.db")
+        self.db.enable_load_extension(True)
+        sqlite_vec.load(self.db)
+        self.db.enable_load_extension(False)
+        
+        self.init_databse()
+        
+    def init_databse(self):
+        
+        self.db.execute(
+            """
+                CREATE VIRTUAL TABLE IF NOT EXISTS vec_faces USING vec0(
+                score FLOAT,
+                time INT64,
+                face_embedding FLOAT[160]
+                );
+            """
+        )
+    
+    def get_face(self,face_embedding:np.ndarray):
+        rows = self.db.execute(
+                """
+                SELECT
+                    rowid,
+                    score,
+                    distance
+                FROM vec_faces
+                WHERE face_embedding MATCH ?
+                ORDER BY distance
+                LIMIT 3
+                """,
+                [face_embedding.tobytes()],
+            ).fetchall()
+        
+        for row in rows:
+            if row[2] < 0.1:
+                return row
+            
+    def check_size(self):
+        
+        rows = self.db.execute(
+            """
+            SELECT COUNT(*) FROM vec_faces;
+            """
+        ).fetchall()
+        
+        return rows[0][0]
+        
+    def update_face(self,face_embedding:np.ndarray,score:float):
+        
+        # check size
+        
+        size = self.check_size()
+        
+        if size >= 500:
+            rows = self.db.execute(
+                """
+                SELECT rowid,time FROM vec_faces ORDER BY time LIMIT 1;
+                """
+            ).fetchall()
+            
+            id = rows[0][0]
+            
+            with self.db:
+                self.db.execute(
+                    """
+                    UPDATE vec_faces SET score = ?, face_embedding = ? WHERE rowid = ?;
+                    """,
+                    [score,face_embedding.tobytes(),id]
+                )
+            
+        
+        # check if face exists
+        
+        face = self.get_face(face_embedding)
+        
+        if face is None:
+            with self.db:
+                self.db.execute(
+                    """
+                    INSERT INTO vec_faces(score, time, face_embedding) VALUES(?, ?, ?);      
+                    """,
+                    [score,time.time_ns(),face_embedding.tobytes()]
+                    )
+        else:
+            
+            id = face[0]
+            
+            with self.db:
+                self.db.execute(
+                    """
+                    UPDATE vec_faces SET score = ? WHERE rowid = ?;
+                    """,
+                    [score,id]
+                )
+            
+            
+    def __del__(self):
+        self.db.commit()
+
 
 class EmotionEstimator(Node):
 
@@ -108,6 +217,11 @@ class EmotionEstimator(Node):
         
         deepid_model:str = 'deepid_edgetpu.tflite' if not sim else 'deepid.tflite'
         face_model:str = 'slim_edgetpu.tflite' if not sim else 'slim.tflite'
+        
+        # VAD init
+        
+        self.vad = webrtcvad.Vad()
+        self.vad.set_mode(1)
         
         # store 500 face embeddings + rewards
         self.embeddings_buffor = np.zeros((500,160),dtype=np.float32)
@@ -227,9 +341,7 @@ class EmotionEstimator(Node):
         
         self.get_logger().info("Creating publisher for spoted faces")
         self.face_publisher = self.create_publisher(FaceEmbed, 'spoted_faces', 10)
-        
-        # Point Cloud 2 callbck
-        
+                
         self.move_lock = False
         
         self.pain_value = 0
@@ -237,6 +349,8 @@ class EmotionEstimator(Node):
         self.good_sense = 0
         
         self.uncertain_sense = 1.0
+        
+        self.uncertain_speech = 0.0
         
         self.points_covarage = 0
         
@@ -270,14 +384,16 @@ class EmotionEstimator(Node):
         self.audio_fear = 0
         
         
-        self.face_database = VectorDatabase(self.face_db_name,[{
-        "name":"faces",
-        "dimension":160
-        }])
+        # self.face_database = VectorDatabase(self.face_db_name,[{
+        # "name":"faces",
+        # "dimension":160
+        # }])
         
-        self.faces = self.face_database['faces']
+        self.faces = FaceSqlite()
+        
+        # self.faces = self.face_database['faces']
                 
-        self.faces_score = FaceData(self.face_score_name)
+        # self.faces_score = FaceData(self.face_score_name)
         
         self.skip_frames_counter = 0
         
@@ -352,8 +468,8 @@ class EmotionEstimator(Node):
         
         self.get_logger().info("Saving faces data!")
         
-        self.face_database.commit()
-        self.faces_score.commit()
+        # self.face_database.commit()
+        # self.faces_score.commit()
         
         self._face_lock.release()
         
@@ -411,31 +527,21 @@ class EmotionEstimator(Node):
             
             nearest_face = self.current_embeddings[0]
             
-            search_ids, search_scores = self.faces.search(nearest_face[0],k=10)
+            face = self.faces.get_face(nearest_face)
             
-            if len(search_ids) != 0:
-                ids = self.search_ids_to_num(search_ids[0])
-                        
-                if len(search_scores)>0 and search_scores[0] >= FACE_TOLERANCE:
-                    
-                    face_obj:FaceObj = self.faces_score.get_face(ids)
-                    
-                    if face_obj is not None:
-                                        
-                        face_score = face_obj.score
-                                            
-                        self.faces_score.update_face_time(ids)
-                        
-                        self.get_logger().info('Face with id '+search_ids[0]+' change emotion state with score '+str(face_score))
+            # search_ids, search_scores = self.faces.search(nearest_face[0],k=10)
+            
+            if face is not None:
+                                                                         
+                face_score = face[1]
+                                                    
+                self.faces.update_face(nearest_face,face_score)
+                
+                self.get_logger().info('Face with id '+face[0]+' change emotion state with score '+str(face_score))
                 
             else:
                 unknow_face = 1
                 
-            for ids,score in zip(search_ids,search_scores):
-                if score >= FACE_TOLERANCE:
-                    _ids = self.search_ids_to_num(ids)
-                    
-                    self.faces_score.update_face_time(_ids)
                     
         
         self._face_lock.release()
@@ -456,8 +562,8 @@ class EmotionEstimator(Node):
         emotions[0] = (self.audio_output == 4)*0.1
         emotions[1] = (self.audio_output == 3)*0.1 + self.audio_fear*0.25 + self.thrust_fear*0.25 + ( face_score < 0 )*0.25  + 4.0*self.pain_value
         emotions[2] = (self.audio_output == 2)*0.1 + self.good_sense + ( face_score > 0 )*0.5
-        emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1
-        emotions[4] = np.floor(self.procratination_counter/5.0)
+        emotions[3] = (self.audio_output == 1)*0.1 + self.jerk_fear*0.25 + self.found_wall*0.65 + self.uncertain_sense*0.5 + unknow_face*0.1 + self.uncertain_speech*0.1
+        emotions[4] = np.floor(self.procratination_counter/10.0)
         
         self.pain_value = self.pain_value / 1.25
         self.good_sense = self.good_sense / 1.5
@@ -465,6 +571,8 @@ class EmotionEstimator(Node):
         self.thrust_fear = self.thrust_fear / 2
         self.jerk_fear = self.jerk_fear / 2
         self.audio_fear = self.audio_fear / 1.5
+        
+        self.uncertain_sense = 0.0
         
         if self.audio_fear <= 0.01:
             self.audio_fear = 0.0
@@ -629,40 +737,16 @@ class EmotionEstimator(Node):
                 # sort by distances from robot                
                 self.current_embeddings = sorted(self.current_embeddings,key=lambda x: x[1],reverse=True)
                 
-                nearest_face = self.current_embeddings[0]
+                nearest_face = self.current_embeddings[0]                
                 
-                faces_in_database:int = len(self.faces)
+                out = self.face.update_face(nearest_face,score)
                 
-                if len(self.faces)>0:
-                    search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
-                    
-                    if len(search_scores)>0 and search_scores[0] >= FACE_TOLERANCE:
-                        
-                        ids = self.search_ids_to_num(search_ids[0])
-                        # set emotion to a face                        
-                        self.faces_score.update_face(ids,score)
-                        
-                        self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
-                        self._face_lock.release()
-                        return
-                    
-                
-                ids = "ids"+str(faces_in_database+1)
-                # remove the oledest face when we got more than 500 elements in database
-                if len(self.faces)>500:
-                    oldest_face:FaceObj = self.faces_score.get_oldest_entry()
-                    
-                    if oldest_face is not None:
-                        ids = oldest_face.id
-                        self.get_logger().info("Face with "+ids+" has been overwritten!")
-                        
-                        self.faces_score.update_face(ids,score)
-                        self._face_lock.release()
-                        return
-                
-                self.faces.setBlock([ids],[nearest_face[0]])                
-                self.faces_score.add_face(faces_in_database+1,score)
-                self.get_logger().info("Face with "+ids+" has been added!")
+                if out == -1:
+                    self.get_logger().info("Face with has been added!")
+                elif out > 0:
+                    self.get_logger().info(f"Face with id {out} has been updated!")
+                else:
+                    self.get_logger().info("Face with has been overrided!")
                 
             self._face_lock.release()
         
@@ -695,8 +779,8 @@ class EmotionEstimator(Node):
         
         accel_value = abs(np.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z) - 9.81)
                 
-        if accel_value > 2.0:
-            self.get_logger().info("Pain occured!")
+        if accel_value > 10.0:
+            self.get_logger().info("Pain occured! (imu)")
             
             self._emotions_lock.acquire()
             
@@ -714,40 +798,17 @@ class EmotionEstimator(Node):
                 # sort by distances from robot                
                 self.current_embeddings = sorted(self.current_embeddings,key=lambda x: x[1],reverse=True)
                 
-                nearest_face = self.current_embeddings[0]
+                nearest_face = self.current_embeddings[0]                
                 
-                faces_in_database:int = len(self.faces)
+                out = self.face.update_face(nearest_face,score)
                 
-                if len(self.faces)>0:
-                    search_ids, search_scores = self.faces.search(nearest_face[0],k=1)
-                    
-                    if len(search_scores)>0 and search_scores[0] >= FACE_TOLERANCE:
-                        
-                        ids = self.search_ids_to_num(search_ids[0])
-                        # set emotion to a face                        
-                        self.faces_score.update_face(ids,score)
-                        
-                        self.get_logger().info("Face with "+search_ids[0]+" has got new score "+str(score))
-                        self._face_lock.release()
-                        return
-                    
-                
-                ids = "ids"+str(faces_in_database+1)
-                # remove the oledest face when we got more than 500 elements in database
-                if len(self.faces)>500:
-                    oldest_face:FaceObj = self.faces_score.get_oldest_entry()
-                    
-                    if oldest_face is not None:
-                        ids = oldest_face.id
-                        self.get_logger().info("Face with "+ids+" has been overwritten!")
-                        
-                        self.faces_score.update_face(ids,score)
-                        self._face_lock.release()
-                        return
-                
-                self.faces.setBlock([ids],[nearest_face[0]])                
-                self.faces_score.add_face(faces_in_database+1,score)
-                self.get_logger().info("Face with "+ids+" has been added!")
+                if out == -1:
+                    self.get_logger().info("Face with has been added!")
+                elif out > 0:
+                    self.get_logger().info(f"Face with id {out} has been updated!")
+                else:
+                    self.get_logger().info("Face with has been overrided!")
+            
             
             self._face_lock.release()
         
@@ -805,6 +866,10 @@ class EmotionEstimator(Node):
         
         start = timer()
         
+        speech_detect = self.vad.is_speech(self.mic_buffor, 16000)
+        
+        if speech_detect:
+            self.uncertain_speech = 1.0
         # We are going to replace it with something simpler
         # output,spectogram = self.hearing.input(self.mic_buffor)
         
@@ -843,7 +908,7 @@ class EmotionEstimator(Node):
         
         self.get_logger().info("Saving faces embeddings!")
         
-        self.face_database.commit() 
+        # self.face_database.commit() 
         
         self._face_lock.release()     
         

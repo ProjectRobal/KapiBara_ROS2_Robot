@@ -3,15 +3,12 @@
 #include <cstdint>
 #include <experimental/simd>
 
-
 // specific number types used by neurons
 typedef float number;
 
 #define MAX_SIMD_VECTOR_SIZE std::experimental::simd_abi::max_fixed_size<number>
 
 typedef std::experimental::fixed_size_simd<number , MAX_SIMD_VECTOR_SIZE> SIMD;
-
-typedef std::experimental::fixed_size_simd<number , MAX_SIMD_VECTOR_SIZE>::reference SIMD_ref;
 
 typedef std::experimental::fixed_size_simd_mask<number , MAX_SIMD_VECTOR_SIZE> SIMD_MASK;
 
@@ -34,25 +31,6 @@ typedef std::experimental::fixed_size_simd_mask<number , MAX_SIMD_VECTOR_SIZE> S
 #define MAX_STD 0.5f
 
 #define MUTATION_PROBABILITY 0.25f
-
-#define ERROR_THRESHOLD_FOR_FIT (0.0001f)
-
-#define ERROR_THRESHOLD_FOR_INSERTION (0.00000001f)
-
-#define ERROR_THRESHOLD_FOR_POINT_REMOVAL (0.00000001f)
-
-// KAN configs:
-
-// we use uniform distribution for x values
-#define DEF_X_LEFT ((number)-10.f)
-
-#define DEF_X_RIGHT ((number)10.f)
-
-// we use gaussian distribution for initial values
-#define DEF_Y_INIT snn::GaussInit<(number)0.f,(number)0.001f>
-
-
-#define THREAD_COUNT (4)
 
 
 // A maximum weight switch probablity

@@ -13,17 +13,17 @@
 #include <csignal> 
 #include <random>
 #include <signal.h>
-
-#include <sqlite3.h>
-#include <sqlite-vec.h>
-
-#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <filesystem>
 
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+
 // quanterion
 #include <sensor_msgs/msg/imu.hpp>
+// 2d depth points
+#include <sensor_msgs/msg/point_cloud2.hpp>
 // mean face embedded
 #include <kapibara_interfaces/msg/face_embed.hpp>
 // emotions, network will be triggered by emotions message
@@ -37,8 +37,6 @@
 // spectogram
 #include <sensor_msgs/msg/image.hpp>
 
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-
 // twist message used for ros2 control
 #include <geometry_msgs/msg/twist.hpp>
 
@@ -49,110 +47,49 @@
 #include <opencv2/highgui/highgui.hpp>
 
 
-#include "config.hpp"
-
-#include "simd_vector.hpp"
-
-#include "layer_kac.hpp"
- 
-#include "initializers/gauss.hpp"
-#include "initializers/constant.hpp"
-#include "initializers/uniform.hpp"
-#include "initializers/hu.hpp"
-
-
-#include "activation/sigmoid.hpp"
-#include "activation/relu.hpp"
-#include "activation/softmax.hpp"
-#include "activation/silu.hpp"
-
-#include "simd_vector_lite.hpp"
-
-#include "layer_counter.hpp"
-
-#include "arbiter.hpp"
-
-#include "kapibara_sublayer.hpp"
-
-#include "attention.hpp"
-
-#include "shift_buffer.hpp"
-
-#include "block_kac.hpp"
-
-#include "common_types.hpp"
-
-size_t snn::BlockCounter::BlockID = 0;
-
-size_t snn::LayerCounter::LayerIDCounter = 0;
-
 /*
-    
-    Now robot will collect points in 2D space into SQLite database, and assigns them to bags which will have id.
 
-    Now there will be also Encoder AI model that will convert sensory data into specific bag id.
+    KapiBara input variables:
 
-    The robot will use this bag id to retrieve points from database and use them to calculate forces in 2D space.
+    quanterion - 4 values
+    linear and angular speed - 6 values
+    face embeddings - 160 values when more than two faces are spotted average thier embeddings
+    spectogram 16x16 - 256 values
+    2d points array from camera, compressed to 16x16 - 256 values
 
-    We should decide whether point should go to bag or not. My idea is to keep track of past added points and  
-    check distance between new and old point.
+    Total 686 values
 
-    How to generate embeddings for encoder? Use randomly generated values or go fully unsuprevised learning.
 */
-
 
 using std::placeholders::_1;
 
 using namespace std::chrono_literals;
+
+#include "head.hpp"
 
 
 #define MAX_LINEAR_SPEED (4.f)
 
 #define MAX_ANGULAR_SPEED (400.f)
 
+#define POPULATION_SIZE (80)
 
+#define ACTION_COUNT (20)
 
-// Behavioral map size
+#define IMAGE_WIDTH (224)
 
-#define STEP_SIZE (10.f)
+#define SPECTOGRAM_WIDTH (224)
 
-
-#define LINEAR_FORCE_COF (10.f)
-
-#define ANGULAR_FORCE_COF (50.f)
-
-
-
-struct snapshot
+void _thread(KapiBaraHead<224,8>& net,uint8_t x[],uint8_t y[])
 {
-    float image[90*90];
-    float image_laplace[90*90];
-    float spectogram[90*90];
-
-    int32_t x;
-    int32_t y;
-};
-
-
-
+    net.fire(x,y);
+}
 
 class KapiBaraMind : public rclcpp::Node
 {
-    // collect snapshots of images, in some kind of buffers
-   
-    std::vector<point> map_points;
-
-    number position[3];
-
-    number orientation[4];
-
-    snapshot current_snapshot;
-
-    ShiftBuffer<snapshot,8> snapshots;
-
-    sqlite3 *db;
-
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr field_publisher;
+    std::random_device rd;
+    std::mt19937 gen; // Standard mersenne_twister_engine seeded with rd()
+    
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr orientation_subscription;
 
@@ -160,214 +97,50 @@ class KapiBaraMind : public rclcpp::Node
 
     rclcpp::Subscription<kapibara_interfaces::msg::FaceEmbed>::SharedPtr face_subscription;
 
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_subscription;
+
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr spectogram_subscription;
 
-    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription;
 
     rclcpp::Subscription<kapibara_interfaces::msg::Emotions>::SharedPtr emotions_subscription;
 
     rclcpp::Service<kapibara_interfaces::srv::StopMind>::SharedPtr stop_mind_service;
 
+    uint8_t last_image[IMAGE_WIDTH*IMAGE_WIDTH];
+
+    uint8_t last_image_during_reasoning[IMAGE_WIDTH*IMAGE_WIDTH];
+
+    uint8_t spectogram_image[SPECTOGRAM_WIDTH*SPECTOGRAM_WIDTH];
+
+    uint8_t spectogram_image_during_reasoning[SPECTOGRAM_WIDTH*SPECTOGRAM_WIDTH];
+
+    uint8_t y[16*16];
+
+    KapiBaraHead<IMAGE_WIDTH,8> image_head;
+
+    KapiBaraHead<SPECTOGRAM_WIDTH,8> spectogram_head;
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_publisher;
 
     rclcpp::TimerBase::SharedPtr network_timer;
 
+    rclcpp::TimerBase::SharedPtr network_save_timer;
 
     long double last_reward;
+    long double delta_reward;
 
-    double yaw;
+    uint8_t x_pool;
+    uint8_t y_pool;
 
 
-    float max_linear_speed;
-    float max_angular_speed;
-
-    float angular_p;
-    float angular_i;
-
-    double integral;
-
-    uint64_t current_bag_id;
-
-    bool check_for_point(point pt,uint64_t& id)
+    enum Stages
     {
-        sqlite3_stmt *stmt;
+        REASONING, // generate costmap
+        MOVING, // move towards generated costmap
+    };
 
-        int rc = SQLITE_OK;
-
-        rc = sqlite3_prepare_v2(this->db,
-            "SELECT "
-            "  id, "
-            "  distance "
-            "FROM vec_points "
-            "WHERE position MATCH ?1 AND k = 3 "
-            "ORDER BY distance "
-            "LIMIT 1 "
-        , -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        float position[3] = {pt.x,pt.y,pt.w};
-
-        sqlite3_bind_blob(stmt, 1, position, sizeof(position), SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-
-        sqlite3_int64 rowid = -1;
-
-        if( rc == SQLITE_ROW )
-        {
-            rowid = sqlite3_column_int64(stmt, 0);
-            double distance = sqlite3_column_double(stmt, 1);
-
-            if( distance > 0.01 )
-            {
-                rowid = -1;
-            }
-        }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
-        }
-
-        sqlite3_finalize(stmt);
-
-        id = rowid;
-        
-        return rowid != -1;
-    }
-
-    // Add new point to databse if point at current coordinates exists, replace it
-    // If no bag is selected create new one.
-    void add_point_to_database(point pt)
-    {
-        // check if point aleardy exits
-
-        uint64_t point_id = 0;
-
-        if(check_for_point(pt,point_id))
-        {
-            RCLCPP_INFO(this->get_logger(),"Updating exisiting point at x: %i y: %i",pt.x,pt.y);
-            this->update_point_in_database(pt,point_id);
-            return;
-        }
-
-
-        // add point to database
-        RCLCPP_INFO(this->get_logger(),"Adding new point at x: %i y: %i",pt.x,pt.y);
-
-        sqlite3_stmt *stmt;
-        
-        int rc = SQLITE_OK;
-
-        // add new point to database
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_points(emotion_state,position) VALUES (?)", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        float position[3] = {pt.x,pt.y,pt.w};
-
-        sqlite3_bind_double(stmt,1,pt.emotion_state);
-
-        sqlite3_bind_blob(stmt,2,position,sizeof(position), SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        uint64_t inserted_point_id = sqlite3_last_insert_rowid(this->db);
-
-        this->add_point_to_bag(pt,inserted_point_id);
-    }
-
-    // Create a new bag and get it's id and hold it to current_bag_id
-    void create_new_bag()
-    {
-        // how to generate embedding for bag?
-    }
-
-    // add a point to a bag, if point is to far away from lastly added point new bag is created
-    void add_point_to_bag(point pt,uint64_t point_id)
-    {
-
-        if( this->current_bag_id == 0 )
-        {
-            this->create_new_bag();
-        }
-        
-        sqlite3_stmt *stmt;
-
-        int rc = SQLITE_OK;
-
-        // add new point to database
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        rc = sqlite3_prepare_v2(this->db, "INSERT INTO bag_point(emotion_state,bag_id,point_id) VALUES (?)", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_int64(stmt,1,this->current_bag_id);
-        sqlite3_bind_int64(stmt,2,point_id);
-
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        rc = sqlite3_exec(this->db, "END", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        
-    }
-
-    // update point in database, if point with id exists, update it
-    void update_point_in_database(point pt,uint64_t id)
-    {
-        int rc = SQLITE_OK;
-        sqlite3_stmt *stmt;
-
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_prepare_v2(this->db, "UPDATE vec_points SET emotion_state = ? WHERE id = ?", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_double(stmt,1,pt.emotion_state);
-        sqlite3_bind_int64(stmt,2,id);
-
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_finalize(stmt);
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-    }
-
-    // takes current snapshot and use encoders or just database to retrive points to map
-    // save current bag id
-    void retrive_points()
-    {
-
-    }
-
-    // add point to map, if point with coordinates exists, replace it
-    void add_point_to_map(point pt)
-    {
-        // use quad tree to check if point exists in map
-    }
+    Stages stage;
 
 
     void stop_mind_handle(const std::shared_ptr<kapibara_interfaces::srv::StopMind::Request> request,
@@ -378,6 +151,7 @@ class KapiBaraMind : public rclcpp::Node
 
         if(stop)
         {
+            this->stage = REASONING;
             this->stop_motors();
             this->network_timer->cancel();
         }
@@ -387,6 +161,41 @@ class KapiBaraMind : public rclcpp::Node
         }
 
         response->ok = true;
+    }
+
+
+    void init_network()
+    {
+        std::fstream file;
+
+        if( !std::filesystem::exists("mind.qkac") )
+        {
+            RCLCPP_ERROR(this->get_logger(),"Failed to load network!");
+
+            this->image_head.init();
+            this->spectogram_head.init();
+            return;
+        }
+
+        file.open("mind.qkac",std::ios::in|std::ios::binary);
+        
+        this->image_head.load(file);
+        this->spectogram_head.load(file);
+
+        if(!file.good())
+        {
+            RCLCPP_ERROR(this->get_logger(),"Failed to load network, error during network load!");
+
+            this->image_head.init();
+            this->spectogram_head.init();   
+
+            file.close();
+            return;
+        }
+
+        file.close();
+
+        RCLCPP_INFO(this->get_logger(),"Network loaded succesfully!");
     }
 
     const std::string checkpoint_filename() const
@@ -413,31 +222,6 @@ class KapiBaraMind : public rclcpp::Node
 
         // const auto& twist = odom->twist.twist;
 
-        const auto& pose = odom->pose.pose;
-
-        this->position[0] = static_cast<number>(pose.position.x)*STEP_SIZE;
-        this->position[1] = static_cast<number>(pose.position.y)*STEP_SIZE;
-        this->position[2] = static_cast<number>(pose.position.z)*STEP_SIZE;
-
-        this->current_snapshot.x = this->position[0];
-        this->current_snapshot.y = this->position[1];
-
-        tf2::Quaternion quat;
-
-        tf2::fromMsg(pose.orientation, quat);
-
-        // raw, pitch, yaw
-        double r,p,y;
-
-        tf2::Matrix3x3 m(quat);
-
-        m.getRPY(r,p,y);
-
-        this->yaw = y;
-
-        RCLCPP_DEBUG(this->get_logger(),"Robot coordinates: %f, %f,%f yaw: %f",
-        pose.position.x,pose.position.y,pose.position.z,this->yaw);
-
         // append orientaion data
 
         // this->inputs[4] = static_cast<number>(twist.linear.x/MAX_LINEAR_SPEED);
@@ -453,22 +237,12 @@ class KapiBaraMind : public rclcpp::Node
     void face_callback(const kapibara_interfaces::msg::FaceEmbed::SharedPtr face)
     {
         RCLCPP_DEBUG(this->get_logger(),"Got face embedding message!");
+    }
 
-        // const std::vector<float>& embeddings = face->embedding;
-
-        // size_t iter = 10;
-
-        // float max_value = *std::max_element(embeddings.begin(), embeddings.end());
-
-        // float min_value = *std::min_element(embeddings.begin(), embeddings.end());
-
-        // for(const float elem : embeddings)
-        // {
-
-        //     this->inputs[iter] = static_cast<number>((elem - min_value)/(max_value - min_value));
-
-        //     iter++;
-        // }
+    void points_callback(const sensor_msgs::msg::PointCloud2::SharedPtr points)
+    {
+        RCLCPP_DEBUG(this->get_logger(),"Got points message!");
+        
     }
 
     void spectogram_callback(const sensor_msgs::msg::Image::SharedPtr img)
@@ -491,29 +265,18 @@ class KapiBaraMind : public rclcpp::Node
 
         cv::Mat spectogram;
 
-        resize(image, spectogram, cv::Size(90, 90), cv::INTER_LINEAR); 
+        resize(image, spectogram, cv::Size(224, 224), cv::INTER_LINEAR); 
 
-        size_t iter = 426;
-
-        // for(size_t y=0;y<16;y++)
-        // {
-        //     for(size_t x=0;x<16;x++)
-        //     {
-        //         this->inputs[iter++] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
-        //     }
-        // }
-
-        for(size_t y=0;y<90;y++)
+        for(size_t y=0;y<224;y++)
         {
-            for(size_t x=0;x<90;x++)
+            for(size_t x=0;x<224;x++)
             {
-                this->current_snapshot.spectogram[y*90+x] = static_cast<float>(spectogram.at<uint8_t>(x,y))/255.f;
+                this->spectogram_image[224*y + x] = static_cast<float>(spectogram.at<uint8_t>(x,y));
             }
         }
-
     }
 
-    void image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr img)
+    void image_callback(const sensor_msgs::msg::Image::SharedPtr img)
     {
         RCLCPP_DEBUG(this->get_logger(),"Got image message!");
 
@@ -521,7 +284,7 @@ class KapiBaraMind : public rclcpp::Node
 
         try
         {
-            cv_ptr = cv_bridge::toCvCopy(img);
+            cv_ptr = cv_bridge::toCvCopy(img, img->encoding);
         }
         catch (cv_bridge::Exception& e)
         {
@@ -531,499 +294,284 @@ class KapiBaraMind : public rclcpp::Node
 
         cv::Mat& image = cv_ptr->image;
 
-        cv::Mat gray;
+        cv::Mat spectogram;
 
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+        resize(image, spectogram, cv::Size(224, 224), cv::INTER_LINEAR); 
 
-        cv::Mat new_image;
-
-        resize(gray, new_image, cv::Size(90, 90), cv::INTER_CUBIC); 
-
-        cv::Mat laplce_img;
-
-        cv::Laplacian(new_image,laplce_img,CV_64F);
-
-        for(size_t y=0;y<90;y++)
+        for(size_t y=0;y<224;y++)
         {
-            for(size_t x=0;x<90;x++)
+            for(size_t x=0;x<224;x++)
             {
-                this->current_snapshot.image[y*90+x] = static_cast<float>(new_image.at<uint8_t>(x,y))/255.f;
-            }
-        }
-
-        for(size_t y=0;y<90;y++)
-        {
-            for(size_t x=0;x<90;x++)
-            {
-                this->current_snapshot.image_laplace[y*90+x] = laplce_img.at<float>(x,y)/255.f;
+                this->last_image[224*y + x] = spectogram.at<uint8_t>(x,y,0)/3 + (2*spectogram.at<uint8_t>(x,y,1))/3 + spectogram.at<uint8_t>(x,y,2)/9 ;
             }
         }
     }
 
+
     void emotions_callback(const kapibara_interfaces::msg::Emotions::SharedPtr emotions)
     {
-        RCLCPP_INFO(this->get_logger(),"Got emotions message!");
+        RCLCPP_DEBUG(this->get_logger(),"Got emotions message!");
 
-        float reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
+        long double reward = emotions->happiness*320.f + emotions->fear*-120.f + emotions->uncertainty*-40.f + emotions->angry*-60.f + emotions->boredom*-20.f;
 
         this->last_reward = reward;
 
-        // propagate rewards to aleardy visited fields
-        float _reward = reward;
+        this->delta_reward = reward - this->last_reward;
 
-        for(size_t i=0;i<this->snapshots.length();++i)
-        {
-            int32_t x = this->snapshots.get(i).x;
-            int32_t y = this->snapshots.get(i).y;
-
-            if( abs(reward) > 0.1f )
-            {
-                // add point to map
-                
-            }
-
-            // maybe let's use sqlite database to stroe points
-
-            _reward*=0.95f;
-        }
     }
 
 
     void network_callback()
     {
-        RCLCPP_INFO(this->get_logger(),"Network fired!");
+        RCLCPP_DEBUG(this->get_logger(),"Network fired!");
 
-        const double time_stamp = 0.1f;
-
-        // retrive bags based on current sensory input
-        
-
-        // get current position
-        double x = this->current_snapshot.x;
-        double y = this->current_snapshot.y;
-
-        // linear forces
-
-        double x_force = 0.f;
-        double y_force = 0.f;
-
-        // iterate over all points in the map
-        for(size_t i=0;i<this->map_points.size();++i)
+        // there is no need to do anything when robot is happy
+        if( this->last_reward >= 0.f )
         {
-            const point& pt = this->map_points[i];
 
-            // calculate distance to point
-            double dx = static_cast<double>(pt.x) - x;
-            double dy = static_cast<double>(pt.y) - y;
+            this->stop_motors();
 
-            double distance2 = dx*dx + dy*dy;
-
-            double force = LINEAR_FORCE_COF / (distance2 + 1e-6);
+            this->stage = REASONING;
             
-            double angle = std::atan2(dy, dx);
-
-            x_force += force * std::cos(angle);
-            y_force += force * std::sin(angle);
-        }
-
-        double target_angle = std::atan2(y_force, x_force);
-
-        double angle_error = target_angle - this->yaw;
-
-        if( abs(angle_error) > 0.1)
-        {
-            this->integral += angle_error*time_stamp;
-
-            this->integral = std::clamp<double>(this->integral, -this->max_angular_speed, this->max_angular_speed);
-
-            double angular_speed = this->angular_p * angle_error + this->angular_i * this->integral;
-
-            this->send_twist(0.f, std::clamp<double>(angular_speed, -this->max_angular_speed, this->max_angular_speed));
-
             return;
         }
 
-        // use 10 Hz
-
-        this->integral = 0.f;
-
-        double force = x_force*x_force + y_force*y_force;
-
-        this->send_twist(
-            std::clamp<double>(force*0.125f, 0.f, this->max_linear_speed),
-            0.f
-        );
-
-    }
-
-    // get id of field associated to current image, return -1 if not found
-    void get_field_id_from_database(sqlite3_int64 ids[], const snapshot& snap)
-    {
-        sqlite3_stmt *stmt;
-
-        int rc = SQLITE_OK;
-
-        rc = sqlite3_prepare_v2(this->db,
-            "SELECT "
-            "  id, "
-            "  distance "
-            "FROM vec_images "
-            "WHERE images_embedding MATCH ?1 AND k = 3 "
-            "ORDER BY distance "
-            "LIMIT 1 "
-        , -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt, 1, snap.image, sizeof(snap.image), SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-
-        sqlite3_int64 rowid = -1;
-
-        if( rc == SQLITE_ROW )
+        switch(this->stage)
         {
-            rowid = sqlite3_column_int64(stmt, 0);
-            double distance = sqlite3_column_double(stmt, 1);
-
-            if( distance > 0.01 )
+            case REASONING:
             {
-                rowid = -1;
+                RCLCPP_INFO(this->get_logger(),"Generating steps!");
+
+                uint8_t y1[16*16](0);
+                uint8_t y2[16*16](0);
+
+                std::thread image_thread(_thread,std::ref(this->image_head),this->last_image,y1);
+                std::thread spectogram_thread(_thread,std::ref(this->spectogram_head),this->spectogram_image,y2);
+
+                if( image_thread.joinable() )
+                {
+                    image_thread.join();
+                } 
+
+                if( spectogram_thread.joinable() )
+                {
+                    spectogram_thread.join();
+                }
+
+                for(size_t i=0;i<(16*16);++i)
+                {
+                    this->y[i] = ( y1[i] + y2[i] ) / 2;
+                }
+
+                std::memcpy(this->last_image_during_reasoning,this->last_image,sizeof(this->last_image));
+                std::memcpy(this->spectogram_image_during_reasoning,this->spectogram_image,sizeof(this->spectogram_image));
+
+                // center of the costmap
+                this->x_pool = 0;
+
+                this->stage = MOVING;
             }
-        }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
-        }
+            break;
 
-        ids[0] = rowid;
-
-        sqlite3_finalize(stmt);
-
-        // now select by laplace image embedding
-
-        rc = sqlite3_prepare_v2(this->db,
-            "SELECT "
-            "  id, "
-            "  distance "
-            "FROM vec_images_laplace "
-            "WHERE images_embedding MATCH ?1 AND k = 3 "
-            "ORDER BY distance "
-            "LIMIT 1 "
-        , -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt, 1, snap.image_laplace, sizeof(snap.image_laplace), SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-
-        rowid = -1;
-
-        if( rc == SQLITE_ROW )
-        {
-            rowid = sqlite3_column_int64(stmt, 0);
-            double distance = sqlite3_column_double(stmt, 1);
-
-            if( distance > 0.01 )
+            case MOVING:
             {
-                rowid = -1;
+
+                // look at reward change, not its value per say
+                if( this->delta_reward < 0.f )
+                {
+                    this->stop_motors();
+
+                    RCLCPP_INFO(this->get_logger(),"Performing mutations!");
+
+                    this->stage = REASONING;
+
+                    // perform mutations
+
+                    uint8_t _y[16*16];
+
+                    {
+
+                        auto _the_runtime_scope = Runtime::scope();
+
+                        Runtime::set_mutation_mode(true);
+                        Runtime::set_global_reward(-10.0f);
+
+                        this->image_head.fire(this->last_image_during_reasoning,_y);
+
+                    }
+
+                    {
+
+                        auto _the_runtime_scope = Runtime::scope();
+
+                        Runtime::set_mutation_mode(true);
+                        Runtime::set_global_reward(-10.0f);
+
+                        this->spectogram_head.fire(this->spectogram_image_during_reasoning,_y);
+
+                    }
+
+                    return;
+
+                }
+
+                if( this->x_pool == 16*16 )
+                {
+                    this->stop_motors();
+
+                    this->stage = REASONING;
+
+                    return;
+                }
+
+                // move a robot
+
+                uint8_t cmd = this->y[this->x_pool];
+
+                if( cmd < 11 )
+                {
+                    this->stop_motors();
+
+                    this->stage = REASONING;
+                    return;
+                }
+                
+                cmd -= 11;
+
+                const double max_linear_speed = this->get_parameter("max_linear_speed").as_double();
+
+                const double max_angular_speed = this->get_parameter("max_angular_speed").as_double();
+
+                double linear_speed = 0;
+
+                double angular_speed = 0;
+
+                // move backward
+                if( cmd <= 61 )
+                {
+                    linear_speed = -(static_cast<double>(cmd)/61.0)*max_linear_speed;
+                }
+                // move left
+                else if( cmd > 61 && cmd <= 122 )
+                {
+                    cmd -= 61;
+
+                    angular_speed = -(static_cast<double>(cmd)/61.0)*max_angular_speed;
+                }
+                // move forward
+                else if( cmd > 122 && cmd < 183 )
+                {
+                    cmd -= 122;
+
+                    linear_speed = (static_cast<double>(cmd)/61.0)*max_linear_speed;
+                }
+                // move right
+                else
+                {
+                    cmd -= 183;
+
+                    angular_speed = (static_cast<double>(cmd)/61.0)*max_angular_speed;
+                }
+
+
+                
+                this->x_pool++;
+
+                // move towards max_iter
+
+                geometry_msgs::msg::Twist twist;
+
+                twist.angular.z = angular_speed;
+
+                twist.linear.x = -linear_speed;
+
+                this->twist_publisher->publish(twist);
             }
+            break;
+
         }
-        else
+        // decode x and y value
+
+        int8_t x = 0 % 16;
+        int8_t y = 0 / 16;
+
+        x -= 8;
+        y -= 8;
+
+        const double max_linear_speed = this->get_parameter("max_linear_speed").as_double();
+
+        const double max_angular_speed = this->get_parameter("max_angular_speed").as_double();
+
+        if(abs(x)<=3)
         {
-            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
+            x = 0;
         }
 
-        ids[1] = rowid;
-
-        sqlite3_finalize(stmt);
-
-
-        // now select by spectogram embedding
-
-        rc = sqlite3_prepare_v2(this->db,
-            "SELECT "
-            "  id, "
-            "  distance "
-            "FROM vec_spectogram "
-            "WHERE images_embedding MATCH ?1 AND k = 3 "
-            "ORDER BY distance "
-            "LIMIT 1 "
-        , -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt, 1, snap.spectogram, sizeof(snap.spectogram), SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-
-        rowid = -1;
-
-        if( rc == SQLITE_ROW )
+        if(abs(y)<=3)
         {
-            rowid = sqlite3_column_int64(stmt, 0);
-            double distance = sqlite3_column_double(stmt, 1);
+            y = 0;
+        }        
 
-            if( distance > 0.01 )
-            {
-                rowid = -1;
-            }
-        }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
-        }
+        double linear_speed = (static_cast<double>(y)/8.f)*max_linear_speed;
 
-        ids[2] = rowid;
+        double angular_speed = (static_cast<double>(x)/8.f)*max_angular_speed;
 
-        sqlite3_finalize(stmt);
+        geometry_msgs::msg::Twist twist;
+
+        twist.angular.z = angular_speed;
+
+        twist.linear.x = -linear_speed;
+
+        this->twist_publisher->publish(twist);
 
     }
 
-    void get_field_by_id(sqlite3_int64 id, float* field)
+    void save_network_callback()
     {
-        RCLCPP_INFO(this->get_logger(),"Got field id: %lli",id);
+        this->stop_motors();
 
-        if( id <= -1 )
+        int8_t ret = this->save_network();
+
+
+        if( ret != 0 )
         {
-            for(size_t i=0;i<8*8;++i)
-            {
-                field[i] = 0.f;
-            }
-
-            return;
+            RCLCPP_ERROR(this->get_logger(),"Got error id during network save: %i",(int32_t)ret);
         }
-
-
-        sqlite3_stmt *stmt;
-
-        int rc = SQLITE_OK;
-
-        rc = sqlite3_prepare_v2(this->db,
-            "SELECT "
-            "  field "
-            "FROM images "
-            "WHERE id = ? "
-            "LIMIT 1"
-        , -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_int64(stmt,1,id);
-
-        rc = sqlite3_step(stmt);
-
-        float *_field;
-
-        if( rc == SQLITE_ROW )
-        {
-            _field = (float*)sqlite3_column_blob(stmt,0);
-
-            for(size_t i=0;i<8*8;++i)
-            {
-                field[i] = _field[i];
-            }
-        }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(),"SQlite select error: %s",sqlite3_errmsg(this->db));
-        }
-
-        sqlite3_finalize(stmt);
-
-    }
-
-    void update_field_with_id(sqlite3_int64 id)
-    {
-        this->update_field_with_id(id,this->current_snapshot);
-    }
-
-    void update_field_with_id(sqlite3_int64 id,const snapshot& snap)
-    {
-        int rc = SQLITE_OK;
-        sqlite3_stmt *stmt;
-
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_prepare_v2(this->db, "UPDATE images SET field = ? WHERE id = ?", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        float field[8*8] = {0.f};
-
-        // to do
-        // this->get_current_field(field,snap);s
-
-        sqlite3_bind_blob(stmt,1,field,sizeof(field), SQLITE_STATIC);
-        sqlite3_bind_int64(stmt,2,id);
-
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_finalize(stmt);
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-    }
-
-    void update_database()
-    {
-        this->update_database(this->current_snapshot);
-    }
-
-    // update database with current image embedding and positions 
-    void update_database(const snapshot& snap)
-    {
-        // we should check if image is aleardy present in database
-
-        sqlite3_int64 id[3];
-
-        this->get_field_id_from_database(id,snap);
-
-        RCLCPP_INFO(this->get_logger(),"Got id up database: %lli,%lli,%lli",id[0],id[1],id[2]);
-
-        if( id[0] > -1 )
-        {
-            // update exisiting field
-            this->update_field_with_id(id[0],snap);
-            return;
-        }
-
-        if( id[1] > -1 )
-        {
-            // update exisiting field
-            this->update_field_with_id(id[1],snap);
-            return;
-        }
-
-        if( id[2] > -1 )
-        {
-            // update exisiting field
-            this->update_field_with_id(id[2],snap);
-            return;
-        }
-
-        sqlite3_stmt *stmt;
-        
-        int rc = SQLITE_OK;
-
-        // add new image embedding
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_images(images_embedding) VALUES (?)", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt,1,snap.image,sizeof(snap.image), SQLITE_STATIC);
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_finalize(stmt);
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        // add new image laplace embedding
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_images_laplace(images_embedding) VALUES (?)", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt,1,snap.image_laplace,sizeof(snap.image_laplace), SQLITE_STATIC);
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_finalize(stmt);
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        // add new image spectogram embedding
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_prepare_v2(this->db, "INSERT INTO vec_spectogram(images_embedding) VALUES (?)", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt,1,snap.spectogram,sizeof(snap.spectogram), SQLITE_STATIC);
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_finalize(stmt);
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        // get field 
-
-        float field[8*8] = {0.f};
-
-        // to do
-        // this->get_current_field(field,snap);
-
-
-        rc = sqlite3_exec(this->db, "BEGIN", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_prepare_v2(this->db, "INSERT INTO images(field) VALUES (?)", -1, &stmt, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_bind_blob(stmt,1,field,sizeof(field), SQLITE_STATIC);
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_finalize(stmt);
-        rc = sqlite3_exec(this->db, "COMMIT", NULL, NULL, NULL);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        
     }
 
     public:
 
-    KapiBaraMind()
-    : Node("kapibara_mind")
+    int8_t save_network()
     {
+        RCLCPP_INFO(this->get_logger(),"Saving network weights!");
+
+        std::fstream file;
+
+        file.open("mind.qkac",std::ios::out|std::ios::binary);
+        
+        this->image_head.save(file);
+        this->spectogram_head.save(file);
+
+        file.close();
+
+        return 0;
+    }
+
+    KapiBaraMind()
+    : Node("kapibara_mind"),
+    gen(rd())
+    {
+
         this->declare_parameter("checkpoint_dir", "/app/src/mind.kac");
 
-        this->declare_parameter("max_linear_speed", 2.f);
+        this->declare_parameter("max_linear_speed", 0.1f);
 
-        this->declare_parameter("max_angular_speed", 3.f);
-
-        this->declare_parameter("angular_p", 4.f);
-
-        this->declare_parameter("angular_i", 2.f);
-
-        this->current_bag_id = 0;
+        this->declare_parameter("max_angular_speed", 2.f);
 
         this->last_reward = 0.f;
+        this->delta_reward = 0.f;
 
-        this->integral = 0.0;
-
-        this->init_database();
-
-        this->max_linear_speed = this->get_parameter("max_linear_speed").as_double();
-        this->max_angular_speed = this->get_parameter("max_angular_speed").as_double();
-
-        this->angular_p = this->get_parameter("angular_p").as_double();
-        this->angular_i = this->get_parameter("angular_i").as_double();;
+        this->init_network();
 
         // add all required subscriptions
 
@@ -1036,11 +584,11 @@ class KapiBaraMind : public rclcpp::Node
         this->face_subscription = this->create_subscription<kapibara_interfaces::msg::FaceEmbed>(
       "spoted_faces", 10, std::bind(&KapiBaraMind::face_callback, this, _1));
 
+        this->points_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+      "midas/points", 10, std::bind(&KapiBaraMind::points_callback, this, _1));
+
         this->spectogram_subscription = this->create_subscription<sensor_msgs::msg::Image>(
       "spectogram", 10, std::bind(&KapiBaraMind::spectogram_callback, this, _1));
-
-      this->image_subscription = this->create_subscription<sensor_msgs::msg::CompressedImage>(
-      "camera/image_raw/compressed", 10, std::bind(&KapiBaraMind::image_callback, this, _1));
 
         this->emotions_subscription = this->create_subscription<kapibara_interfaces::msg::Emotions>(
       "emotions", 10, std::bind(&KapiBaraMind::emotions_callback, this, _1));
@@ -1054,141 +602,34 @@ class KapiBaraMind : public rclcpp::Node
         this->twist_publisher = this->create_publisher<geometry_msgs::msg::Twist>("motors/cmd_vel_unstamped", 10);
 
         this->network_timer = this->create_wall_timer(100ms, std::bind(&KapiBaraMind::network_callback, this));
-        
-        this->field_publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>("field", 10);
-        
+
+        // save each 60min
+        this->network_save_timer= this->create_wall_timer(60min, std::bind(&KapiBaraMind::save_network_callback, this));
     }
-
-    void send_twist(float linear,float angular)
-    {
-        geometry_msgs::msg::Twist twist;
-
-        twist.angular.z = angular;
-
-        twist.linear.x = linear;
-
-        this->twist_publisher->publish(twist);
-    }
-
 
     void stop_motors()
     {
-        this->send_twist(0.f,0.f);
+        geometry_msgs::msg::Twist twist;
+
+        twist.angular.z = 0.f;
+
+        twist.linear.x = 0.f;
+
+        this->twist_publisher->publish(twist);
     }
 
 
     void shutdown()
     {
         this->stop_motors();
-    }
 
-    inline void validate_sqlite(int rc)
-    {
-        if( rc != SQLITE_OK && rc != SQLITE_DONE )
-        {
-            RCLCPP_ERROR(this->get_logger(),"SQLITE error: %s",sqlite3_errmsg(this->db));
-        }
-    }
-
-    void init_database()
-    {
-        int rc = SQLITE_OK;
-
-        // create database
-        rc = sqlite3_open("mind_database.db", &db);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-
-        sqlite3_stmt *stmt;
-
-        // create vector table if it doesn't exist
-
-        RCLCPP_INFO(this->get_logger(),"Creating database tables...");
-
-        RCLCPP_INFO(this->get_logger(),"Creating vec_images database...");
-
-        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
-        
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt);
-
-
-        // create vector table if it doesn't exist ( laplace image )
-
-        RCLCPP_INFO(this->get_logger(),"Creating vec_images_laplace database...");
-
-        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_images_laplace USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
-        
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt);
-
-        // create vector table if it doesn't exist ( spectograms )
-        RCLCPP_INFO(this->get_logger(),"Creating spectogram database...");
-
-        rc = sqlite3_prepare_v2(db, "CREATE VIRTUAL TABLE IF NOT EXISTS vec_spectograms USING vec0(id INTEGER PRIMARY KEY, images_embedding FLOAT[8100])", -1, &stmt, NULL);
-        
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt);
-
-        // create table for points
-        RCLCPP_INFO(this->get_logger(),"Creating point database...");
-
-        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS vec_points(id INTEGER PRIMARY KEY,emotion_state FLOAT,position FLOAT[3])", -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt);
-
-        // create table for bags
-        RCLCPP_INFO(this->get_logger(),"Creating bags database...");
-
-        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS vec_bag(id INTEGER PRIMARY KEY,embeddings FLOAT[64])", -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt); 
-
-        // create table for holding pair of bag and point
-        RCLCPP_INFO(this->get_logger(),"Creating bags and point relation database...");
-
-        rc = sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS bag_point(id INTEGER PRIMARY KEY,bag_id INTEGER,point_id INTEGER)", -1, &stmt, NULL);
-
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        rc = sqlite3_step(stmt);
-        this->validate_sqlite(rc);
-        assert( rc == SQLITE_OK || rc == SQLITE_DONE );
-        sqlite3_finalize(stmt); 
-
-    }
-
-    void close_database()
-    {
-        sqlite3_close(db);
+        this->save_network();
     }
 
     ~KapiBaraMind()
     {
-        this->close_database();
-    }   
+        
+    }
 
 };
 
@@ -1201,11 +642,6 @@ int main(int argc,char** argv)
 {   
     rclcpp::init(argc, argv);
 
-    // init sqlite vec
-    int rc = SQLITE_OK;
-
-    rc = sqlite3_auto_extension((void (*)())sqlite3_vec_init);
-    assert(rc == SQLITE_OK);
 
     auto node = std::make_shared<KapiBaraMind>();
 

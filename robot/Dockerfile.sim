@@ -1,9 +1,9 @@
-FROM althack/ros2:humble-cuda-gazebo
+FROM althack/ros2:humble-cuda-gazebo-2025-05-01
 
 # SHELL ["/bin/bash", "-c"]
 
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 COPY ./dependencies /app/dep
 

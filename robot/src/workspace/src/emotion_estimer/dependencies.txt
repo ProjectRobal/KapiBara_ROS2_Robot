@@ -5,5 +5,7 @@ tensorflow
 numpy
 keras
 tf_keras
-git+https://github.com/ProjectRobal/tiny_vectordb.git
 platformdirs
+pysqlite3
+sqlite-vec
+webrtcvad

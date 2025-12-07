@@ -15,15 +15,11 @@ find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(kapibara_interfaces REQUIRED)
 find_package(cv_bridge REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(SQLite3 REQUIRED)
-
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
 
 include_directories(include)
+
+add_subdirectory(qkan)
 
 find_package(OpenSSL REQUIRED)
 
@@ -35,8 +31,8 @@ file(GLOB all_SRCS
         )
 
 add_executable(mind ${all_SRCS})
-ament_target_dependencies(mind rclcpp SQLite3 sensor_msgs tf2_geometry_msgs geometry_msgs nav_msgs std_msgs kapibara_interfaces cv_bridge OpenCV)
-target_link_libraries(mind fftw3 OpenSSL::Crypto SQLite::SQLite3)
+ament_target_dependencies(mind rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs kapibara_interfaces cv_bridge OpenCV)
+target_link_libraries(mind fftw3 OpenSSL::Crypto qkan)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

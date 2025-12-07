@@ -3,7 +3,7 @@ FROM --platform=linux/arm64/v8 ros:humble-ros-core
 SHELL ["/bin/bash", "-c"]
 
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 COPY ./dependencies /app/dep
 
@@ -36,17 +36,21 @@ RUN mkdir -p /app/src/workspace
 RUN apt remove -y meson
 RUN pip3 install --upgrade meson
 
-WORKDIR /
+WORKDIR / 
 
-RUN git clone https://github.com/raspberrypi/libcamera.git
+RUN git clone https://github.com/OpenKinect/libfreenect
 
-WORKDIR /libcamera
+WORKDIR /libfreenect
 
-RUN meson setup build --buildtype=release -Dpipelines=rpi/vc4,rpi/pisp -Dipas=rpi/vc4,rpi/pisp -Dv4l2=true -Dgstreamer=enabled -Dtest=false -Dlc-compliance=disabled -Dcam=disabled -Dqcam=disabled -Ddocumentation=disabled -Dpycamera=enabled
+RUN mkdir build
 
-RUN ninja -C build
+WORKDIR /libfreenect/build
 
-RUN ninja -C build install
+RUN cmake -L ..
+
+RUN make
+
+RUN make install
 
 WORKDIR /
 
@@ -73,6 +77,18 @@ RUN dpkg -i gasket-dkms_1.0-18_all.deb
 RUN ldconfig
 
 RUN chmod -R a+x /app/cmd
+
+RUN git clone https://github.com/asg017/sqlite-vec
+
+WORKDIR /sqlite-vec
+
+RUN ./scripts/vendor.sh
+
+RUN make loadable
+
+RUN make install
+
+WORKDIR /
 
 RUN apt install -y tini
 
