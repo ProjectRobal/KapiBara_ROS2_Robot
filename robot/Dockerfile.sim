@@ -33,6 +33,39 @@ RUN mkdir -p /app/src/workspace
 
 RUN chmod -R a+x /app/cmd
 
+# Pangolin
+
+# Get Pangolin
+WORKDIR /
+RUN git clone --recursive https://github.com/stevenlovegrove/Pangolin.git
+WORKDIR /Pangolin
+
+# Install dependencies (as described above, or your preferred method)
+RUN yes | ./scripts/install_prerequisites.sh recommended
+
+# Configure and build
+RUN cmake -B build
+RUN cmake --build build
+RUN cmake --install build
+
+# Install OBR SLAM 3
+
+RUN mkdir -p /home/orb
+
+WORKDIR /home/orb
+
+RUN git clone https://github.com/suchetanrs/ORB_SLAM3.git
+
+WORKDIR /home/orb/ORB_SLAM3
+
+RUN chmod +x build.sh
+
+RUN ./build.sh
+
+RUN cp lib/libORB_SLAM3.so /lib
+
+WORKDIR /
+
 RUN apt install -y tini
 ENTRYPOINT ["/usr/bin/tini", "--"]
 

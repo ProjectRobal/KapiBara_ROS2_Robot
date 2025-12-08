@@ -22,7 +22,8 @@ RUN apt install -y curl gnupg2 lsb-release
 
 RUN apt update -y
 
-RUN apt install git ninja-build meson udev python3-ply python3-jinja2 libglib2.0-dev libgstreamer-plugins-base1.0-dev libboost-dev libgnutls28-dev openssl libtiff-dev pybind11-dev  -y
+RUN apt install git ninja-build meson udev python3-ply python3-jinja2 libglib2.0-dev \
+libgstreamer-plugins-base1.0-dev libboost-dev libgnutls28-dev openssl libtiff-dev pybind11-dev libusb-1.0-0-dev  -y
 
 RUN apt install python3-pip -y
 #RUN --mount=type=cache,target=/root/.cache/pip xargs pip3 install < /app/dep/python.txt
@@ -35,6 +36,8 @@ RUN mkdir -p /app/src/workspace
 
 RUN apt remove -y meson
 RUN pip3 install --upgrade meson
+
+# Install libfreenect
 
 WORKDIR / 
 
@@ -51,6 +54,8 @@ RUN cmake -L ..
 RUN make
 
 RUN make install
+
+# Install edgetpu
 
 WORKDIR /
 

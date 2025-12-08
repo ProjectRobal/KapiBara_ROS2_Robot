@@ -43,7 +43,7 @@ rm -R robot/src/workspace/sim_install
 
 elif [ "$arg" = "compile" ]; then
 
-docker compose -f compose_sim_${VENDOR}.yml exec gazebo /app/cmd/build_packages.sh camera_ros kinect_ros2
+docker compose -f compose_sim_${VENDOR}.yml exec gazebo /app/cmd/build_packages.sh kinect_ros2
 
 elif [ "$arg" = "purge" ]; then
 
