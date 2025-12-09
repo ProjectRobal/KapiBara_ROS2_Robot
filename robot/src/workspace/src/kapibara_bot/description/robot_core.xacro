@@ -1,0 +1,380 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kapibara_robot">
+
+    <xacro:include filename="inertial_macros.xacro"/>
+
+    <material name="white">
+        <color rgba="1 1 1 1" />
+    </material>
+
+    <material name="orange">
+        <color rgba="1 0.3 0.1 1" />
+    </material>
+
+    <material name="black">
+        <color rgba="0 0 0 1" />
+    </material>
+
+    <material name="red">
+        <color rgba="1 0 0 1" />
+    </material>
+
+    <!-- BASE LINK -->
+
+    <link name="$(arg robot_name)_base_link">
+    
+    </link>
+
+    <!-- CHASSIS LINK -->
+
+    <joint name="$(arg robot_name)_chassis_joint" type="fixed">
+        <parent link="$(arg robot_name)_base_link" />
+        <child link="$(arg robot_name)_chassis" />
+        <origin xyz="0 0 0" />
+    </joint>
+
+    <link name="$(arg robot_name)_chassis">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <mesh filename="file://$(find kapibara)/meshes/Bottom.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+            <material name="black" />
+        </visual>
+        
+    </link>
+
+    <gazebo reference="$(arg robot_name)_chassis">
+        <material>Gazebo/Black</material>
+    </gazebo>
+
+    <!-- Base -->
+
+    <joint name="$(arg robot_name)_base_joint" type="fixed">
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_base" />
+        <origin xyz="-0.027 0 0.05" rpy="0 0 ${pi}" />
+    </joint>
+
+    <link name="$(arg robot_name)_base">
+        <visual>
+            <origin xyz="0 0 0.05" />
+            <geometry>
+                <mesh filename="file://$(find kapibara)/meshes/Top.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+            <material name="orange" />
+        </visual>
+        <collision name="base_collision">
+            <origin xyz="-0.02 0 0.07" />
+            <geometry>
+                <box size="0.279 0.134 0.15" />
+            </geometry>
+        </collision>
+        <xacro:inertial_box mass="1.15" x="0.279" y="0.134" z="0.15" >
+            <origin xyz="-0.02 0 0.07" rpy="0 0 0" />
+        </xacro:inertial_box>
+    </link>
+    
+    <gazebo reference="$(arg robot_name)_base">
+        <material>Gazebo/Orange</material>
+
+        <sensor type="contact" name="contact_sensor">
+            <always_on>true</always_on>
+            <update_rate>50</update_rate>
+            <contact>
+            <collision>base_link_fixed_joint_lump__base_collision_collision</collision>
+            </contact>
+            <plugin name="bumper_plugin_kapibara" filename="libgazebo_ros_bumper.so">
+                <alwaysOn>true</alwaysOn>
+                <frameName>$(arg robot_name)_base</frameName>
+                <ros>
+                <remapping>bumper_states:=collision</remapping>
+                </ros>
+            </plugin>
+      </sensor>
+    </gazebo>
+
+    <!-- LEFT WHEEL LINK -->
+
+    <joint name="$(arg robot_name)_wheel_left1_joint" type="continuous">
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_left_wheel1" />
+        <axis xyz="0 0 1"/>
+        
+        <origin rpy="${-pi/2} 0 0" xyz="0.065 0.066 0.0135"/>
+        <!-- <joint_properties damping="1.0" friction="1.0" />  -->
+        <limit effort="10000" velocity="1000"/> 
+    </joint>
+
+
+    <link name="$(arg robot_name)_left_wheel1">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.044">
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+    <gazebo reference="$(arg robot_name)_left_wheel1">
+        <material>Gazebo/White</material>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+    </gazebo>
+
+
+    <joint name="$(arg robot_name)_wheel_left2_joint" type="continuous">
+        <mimic joint="$(arg robot_name)_wheel_left1_joint" multiplier="1" offset="0"/>
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_left_wheel2" />
+        <axis xyz="0 0 1"/>
+        <origin rpy="${-pi/2} 0 0" xyz="0.005 0.066 0.0135"/>
+        <limit effort="10000" velocity="1000"/> 
+    </joint>
+
+
+    <link name="$(arg robot_name)_left_wheel2">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.044">
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+    <gazebo reference="$(arg robot_name)_left_wheel2">
+        <material>Gazebo/White</material>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+    </gazebo>
+
+
+    <joint name="$(arg robot_name)_wheel_left3_joint" type="continuous">
+        <mimic joint="$(arg robot_name)_wheel_left1_joint" multiplier="1" offset="0"/>
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_left_wheel3" />
+        <axis xyz="0 0 1"/>
+        <origin rpy="${-pi/2} 0 0" xyz="-0.055 0.066 0.0135"/>
+        <limit effort="10000" velocity="1000"/> 
+    </joint>
+
+
+    <link name="$(arg robot_name)_left_wheel3">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.044">
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+    <gazebo reference="$(arg robot_name)_left_wheel3">
+        <material>Gazebo/White</material>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+    </gazebo>
+
+    <!-- RIGHT WHEEL LINK -->
+
+    <joint name="$(arg robot_name)_wheel_right1_joint" type="continuous">
+        <mimic joint="$(arg robot_name)_wheel_right3_joint" multiplier="1" offset="0"/>
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_right_wheel1" />
+        <axis xyz="0 0 1"/>
+        
+        <origin rpy="${-pi/2} 0 0" xyz="0.005 -0.066 0.0135"/>
+        <!-- <joint_properties damping="1.0" friction="1.0" />  -->
+        <!-- <limit effort="10000" velocity="1000"/>  -->
+    </joint>
+
+
+    <link name="$(arg robot_name)_right_wheel1">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.044">
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+    <gazebo reference="$(arg robot_name)_right_wheel1">
+        <material>Gazebo/White</material>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+    </gazebo>
+
+
+    <joint name="$(arg robot_name)_wheel_right2_joint" type="continuous">
+        <mimic joint="$(arg robot_name)_wheel_right3_joint" multiplier="1" offset="0"/>
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_right_wheel2" />
+        <axis xyz="0 0 1"/>
+        <origin rpy="${-pi/2} 0 0" xyz="0.065 -0.066 0.0135"/>
+    </joint>
+
+
+    <link name="$(arg robot_name)_right_wheel2">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.044">
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+    <gazebo reference="$(arg robot_name)_right_wheel2">
+        <material>Gazebo/White</material>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+    </gazebo>
+
+
+    <joint name="$(arg robot_name)_wheel_right3_joint" type="continuous">
+        <parent link="$(arg robot_name)_chassis" />
+        <child link="$(arg robot_name)_right_wheel3" />
+        <axis xyz="0 0 1"/>
+        <origin rpy="${-pi/2} 0 0" xyz="-0.055 -0.066 0.0135"/>
+    </joint>
+
+
+    <link name="$(arg robot_name)_right_wheel3">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.044" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.044">
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+    <gazebo reference="$(arg robot_name)_right_wheel3">
+        <material>Gazebo/White</material>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+    </gazebo>
+
+    <transmission name="transmission1">
+        <plugin>transmission_interface/SimpleTransmission</plugin>
+        <joint name="joint1" role="joint1">
+          <mechanical_reduction>325.949</mechanical_reduction>
+        </joint>
+    </transmission>
+
+    <!-- EARS -->
+
+
+    <joint name="$(arg robot_name)_left_ear_joint" type="revolute">
+        <parent link="$(arg robot_name)_base" />
+        <child link="$(arg robot_name)_left_ear" />
+        <axis xyz="0 -1 0"/>
+        <origin rpy="0 ${pi/2} 0" xyz="-0.09 0.075 0.09" />
+        <limit effort="1" velocity="1" upper="${pi}" lower="0" />
+    </joint>
+
+    <link name="$(arg robot_name)_left_ear">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <mesh filename="package://kapibara/meshes/Wing1.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+            <geometry>
+                <cylinder radius="0.024" length="0.01" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.01">
+            <origin xyz="0 0 0" rpy="${pi/2} 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+
+     <joint name="$(arg robot_name)_right_ear_joint" type="revolute">
+        <parent link="$(arg robot_name)_base" />
+        <child link="$(arg robot_name)_righ_ear" />
+        <axis xyz="0 -1 0"/>
+        <origin rpy="0 ${pi/2} 0" xyz="-0.09 -0.070 0.09" />
+        <limit effort="1" velocity="1" upper="${pi}" lower="0" />
+    </joint>
+
+    <link name="$(arg robot_name)_righ_ear">
+        <visual>
+            <origin xyz="0 0 0" />
+            <geometry>
+                <mesh filename="package://kapibara/meshes/Wing2.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+            <material name="white" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="${pi/2} 0 0" />
+            <geometry>
+                <cylinder radius="0.024" length="0.01" />
+            </geometry>
+        </collision>
+        <xacro:inertial_cylinder mass="0.1" radius="0.024" length="0.01">
+            <origin xyz="0 0 0" rpy="${pi/2} 0 0" />
+        </xacro:inertial_cylinder>
+    </link>
+
+</robot>

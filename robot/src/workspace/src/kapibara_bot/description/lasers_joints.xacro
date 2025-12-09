@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- FRONT LEFT DISTANCE SENSOR -->
+
+    <joint name="$(arg robot_name)_front_left_laser_joint" type="fixed">
+        <parent link="$(arg robot_name)_base"/>
+        <child link="$(arg robot_name)_front_left_laser_link"/>
+        <origin xyz="-0.17 -0.04 0.04" rpy="0 0 ${pi}"/>
+    </joint>
+
+    <link name="$(arg robot_name)_front_left_laser_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01" />
+            </geometry>
+            <material name="red" />
+        </visual>
+    </link>
+
+    <!-- FRONT RIGHT DISTANCE SENSOR -->
+
+    <joint name="$(arg robot_name)_front_right_laser_joint" type="fixed">
+        <parent link="$(arg robot_name)_base"/>
+        <child link="$(arg robot_name)_front_right_laser_link"/>
+        <origin xyz="-0.17 0.04 0.04" rpy="0 0 ${pi}"/>
+    </joint>
+
+    <link name="$(arg robot_name)_front_right_laser_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01" />
+            </geometry>
+            <material name="red" />
+        </visual>
+    </link>
+
+
+    <!-- SIDE LEFT DISTANCE SENSOR -->
+
+    <joint name="$(arg robot_name)_side_left_laser_joint" type="fixed">
+        <parent link="$(arg robot_name)_base"/>
+        <child link="$(arg robot_name)_side_left_laser_link"/>
+        <origin xyz="-0.02 -0.06 0.04" rpy="0 0 ${-pi/2}"/>
+    </joint>
+
+    <link name="$(arg robot_name)_side_left_laser_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01" />
+            </geometry>
+            <material name="red" />
+        </visual>
+    </link>
+
+    <!-- SIDE RIGHT DISTANCE SENSOR -->
+
+    <joint name="$(arg robot_name)_side_right_laser_joint" type="fixed">
+        <parent link="$(arg robot_name)_base"/>
+        <child link="$(arg robot_name)_side_right_laser_link"/>
+        <origin xyz="-0.02 0.06 0.04" rpy="0 0 ${pi/2}"/>
+    </joint>
+
+    <link name="$(arg robot_name)_side_right_laser_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01" />
+            </geometry>
+            <material name="red" />
+        </visual>
+    </link>
+
+    <xacro:include filename="lasers_def.xacro" />
+
+    <xacro:laser_sensor sensor_name="front_left" />
+    <xacro:laser_sensor sensor_name="front_right" />
+    <xacro:laser_sensor sensor_name="floor" />
+    <xacro:laser_sensor sensor_name="side_left" />
+    <xacro:laser_sensor sensor_name="side_right" />
+
+</robot>

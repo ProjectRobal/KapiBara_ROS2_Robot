@@ -1,0 +1,178 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:unless value="$(arg sim_mode)">
+        <ros2_control name="KapiBaraMotors" type="system">
+            <hardware>
+                <plugin>vel_saltis_drive/VelSaltisDrive</plugin>
+                <param name="left_wheel_name">$(arg robot_name)_wheel_left1_joint</param>
+                <param name="right_wheel_name">$(arg robot_name)_wheel_right3_joint</param>
+
+                <!-- <param name="left_ear">left_ear_joint</param>
+                <param name="right_ear">right_ear_joint</param> -->
+                
+                <param name="max_speed">10</param>
+                <param name="loop_rate">30</param>
+            </hardware>
+            <joint name="$(arg robot_name)_wheel_left1_joint">
+                <command_interface name="velocity">
+                    <param name="min">-10</param> 
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="velocity" />
+
+                <state_interface name="position" />
+            </joint>
+
+            <joint name="$(arg robot_name)_wheel_right3_joint">
+                <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+            </joint>
+
+            <!-- <joint name="right_ear_joint">
+                <command_interface name="position">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="position" />
+            </joint>
+
+            <joint name="left_ear_joint">
+                <command_interface name="position">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="position" />
+            </joint> -->
+
+        </ros2_control>
+
+        <ros2_control name="KapiBaraEars" type="system">
+            <hardware>
+                <plugin>vel_saltis_ears/VelSaltisEars</plugin>
+
+                <param name="left_ear_name">$(arg robot_name)_left_ear_joint</param>
+                <param name="right_ear_name">$(arg robot_name)_right_ear_joint</param>                
+                <param name="loop_rate">30</param>
+            </hardware>
+
+            <joint name="$(arg robot_name)_right_ear_joint">
+                <command_interface name="position">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="position" />
+            </joint>
+
+            <joint name="$(arg robot_name)_left_ear_joint">
+                <command_interface name="position">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="position" />
+            </joint>
+
+        </ros2_control>
+    </xacro:unless>
+
+    <xacro:if value="$(arg sim_mode)">
+        <ros2_control name="GazeboSystem" type="system">
+            <hardware>
+                <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+            </hardware>
+            <joint name="$(arg robot_name)_wheel_left1_joint">
+                <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+            </joint>
+
+            <joint name="$(arg robot_name)_wheel_left2_joint">
+                <!-- <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface> -->
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+                <param name="mimic">$(arg robot_name)_wheel_left1_joint</param>
+                <param name="multiplier">1</param>
+            </joint>
+
+            <joint name="$(arg robot_name)_wheel_left3_joint">
+                <!-- <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface> -->
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+                <param name="mimic">$(arg robot_name)_wheel_left1_joint</param>
+                <param name="multiplier">1</param>
+            </joint>
+
+            <joint name="$(arg robot_name)_wheel_right3_joint">
+                <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+            </joint>
+
+            <joint name="$(arg robot_name)_wheel_right2_joint">
+                <!-- <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface> -->
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+                <param name="mimic">$(arg robot_name)_wheel_right3_joint</param>
+                <param name="multiplier">1</param>
+            </joint>
+
+            <joint name="$(arg robot_name)_wheel_right1_joint">
+                <!-- <command_interface name="velocity">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface> -->
+                <state_interface name="velocity" />
+                <state_interface name="position" />
+                <param name="mimic">$(arg robot_name)_wheel_right3_joint</param>
+                <param name="multiplier">1</param>
+            </joint>
+
+            <joint name="$(arg robot_name)_right_ear_joint">
+                <command_interface name="position">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="position" />
+            </joint>
+
+            <joint name="$(arg robot_name)_left_ear_joint">
+                <command_interface name="position">
+                    <param name="min">-10</param>
+                    <param name="max">10</param>
+                </command_interface>
+                <state_interface name="position" />
+            </joint>
+        </ros2_control>
+    </xacro:if>
+
+    <gazebo>
+        <plugin name="kapibara_gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+            <ros>
+                <namespace>$(arg robot_name)</namespace>
+            </ros>
+            <robot_param_node>robot_state_publisher</robot_param_node>
+            <parameters>$(find kapibara)/config/my_controllers.yaml</parameters>
+            <parameters>$(find kapibara)/config/my_controllers_sim.yaml</parameters>
+        </plugin>
+    </gazebo>
+
+</robot>
