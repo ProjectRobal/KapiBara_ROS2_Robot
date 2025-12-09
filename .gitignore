@@ -10,6 +10,9 @@ robot/src/workspace/build/*
 robot/src/workspace/sim_install/*
 robot/src/workspace/sim_build/*
 
+*.pdf
+*.gv
+
 *.kac
 *.kac.sha256
 
