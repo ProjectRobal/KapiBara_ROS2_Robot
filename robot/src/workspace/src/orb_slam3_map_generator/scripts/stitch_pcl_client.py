@@ -13,7 +13,7 @@ class GlobalPointCloudClient(Node):
         super().__init__('global_point_cloud_client')
 
         # Create a client for the 'trigger_global_cloud' service
-        self.client = self.create_client(GetGlobalPointCloud, 'trigger_global_cloud')
+        self.client = self.create_client(GetGlobalPointCloud, '/KapiBara/trigger_global_cloud')
 
         # Wait for the service to be available
         while not self.client.wait_for_service(timeout_sec=1.0):

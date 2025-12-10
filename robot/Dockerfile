@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64/v8 ros:humble-ros-core
+FROM ros:humble-ros-core
 
 SHELL ["/bin/bash", "-c"]
 
@@ -9,11 +9,12 @@ COPY ./dependencies /app/dep
 
 COPY ./debs /debs
 
+
+RUN apt install -y curl gnupg2 lsb-release
+
 RUN apt update
 
 RUN apt install software-properties-common -y
-
-RUN apt install -y curl gnupg2 lsb-release
 
 # RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | gpg --dearmor --batch --yes -o /usr/share/keyrings/ros-archive-keyring.gpg
 
@@ -82,16 +83,6 @@ RUN dpkg -i gasket-dkms_1.0-18_all.deb
 RUN ldconfig
 
 RUN chmod -R a+x /app/cmd
-
-RUN git clone https://github.com/asg017/sqlite-vec
-
-WORKDIR /sqlite-vec
-
-RUN ./scripts/vendor.sh
-
-RUN make loadable
-
-RUN make install
 
 WORKDIR /
 

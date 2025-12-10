@@ -21,7 +21,8 @@ KapiBara/motors:
     base_frame_id: KapiBara_base_link
     odom_frame_id: KapiBara_odom
 
-    enable_odom_tf: True
+    enable_odom_tf: False
+    
 
     tf_frame_prefix_enable: False
 

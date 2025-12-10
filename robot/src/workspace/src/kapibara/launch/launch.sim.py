@@ -112,26 +112,38 @@ def generate_launch_description():
         namespace=""
     )
     
-    vocabulary_file_path = "/home/orb/ORB_SLAM3/Vocabulary/ORBvoc.txt"
+    parameters=[{
+            'use_sim_time': True,
+          'frame_id':'KapiBara_base_link',
+          'subscribe_depth':True,
+          'subscribe_odom_info':True,
+          'odom_frame_id': 'KapiBara_odom',
+          'publish_tf':True,
+          'approx_sync':True}]
     
-    config_file_path = os.path.join(orb_wrapper_pkg, 'params', 'gazebo_rgbd.yaml')
-        
-    orb_slam = Node(
-            package='orb_slam3_ros2_wrapper',
-            executable='rgbd',
-            output='screen',
-            namespace="KapiBara",
-            arguments=[vocabulary_file_path, config_file_path],
-            parameters=[{
-                'use_sim_time': True,
-                'rgb_image_topic_name': '/KapiBara/camera/image_raw',
-                'depth_image_topic_name': '/KapiBara/camera/depth/image_raw',
-                'camera_info_topic': '/KapiBara/camera/camera_info',
-                'robot_base_frame': 'KapiBara_base_link',
-                'odom_frame': 'KapiBara_odom',
-                'odometry_mode': True,
-                'do_loop_closing':True
-            }])
+    remappings=[
+          ('rgb/image', '/KapiBara/camera/image_raw'),
+          ('rgb/camera_info', '/KapiBara/camera/camera_info'),
+          ('depth/image', '/KapiBara/camera/depth/image_raw')]
+    
+    rtabmap_odom = Node(
+            package='rtabmap_odom', executable='rgbd_odometry', output='screen',
+            parameters=parameters,
+            remappings=remappings,
+            namespace="KapiBara")
+
+    rtabmap_slam = Node(
+            package='rtabmap_slam', executable='rtabmap', output='screen',
+            parameters=parameters,
+            remappings=remappings,
+            arguments=['-d'],
+            namespace="KapiBara")
+
+    rtabmap_viz = Node(
+            package='rtabmap_viz', executable='rtabmap_viz', output='screen',
+            parameters=parameters,
+            remappings=remappings,
+            namespace="KapiBara")
     
     # Run the node
     return LaunchDescription([
@@ -146,8 +158,12 @@ def generate_launch_description():
         # mind,
         # mqtt_bridge,
         mic,
-        orb_slam
+        # orb_slam,
+        # stitch_pcl_node
         # voice_assitant
+        rtabmap_odom,
+        rtabmap_slam,
+        rtabmap_viz
     ])
 
 
