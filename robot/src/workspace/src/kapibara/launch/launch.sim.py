@@ -158,8 +158,6 @@ def generate_launch_description():
         # mind,
         # mqtt_bridge,
         mic,
-        # orb_slam,
-        # stitch_pcl_node
         # voice_assitant
         rtabmap_odom,
         rtabmap_slam,
