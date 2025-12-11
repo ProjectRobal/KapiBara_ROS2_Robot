@@ -113,13 +113,15 @@ def generate_launch_description():
     )
     
     parameters=[{
-            'use_sim_time': True,
+          'use_sim_time': True,
           'frame_id':'KapiBara_base_link',
           'subscribe_depth':True,
           'subscribe_odom_info':True,
           'odom_frame_id': 'KapiBara_odom',
           'publish_tf':True,
-          'approx_sync':True}]
+          'approx_sync':True,
+          'database_path':'/app/src/map/rtabmap.db'
+          }]
     
     remappings=[
           ('rgb/image', '/KapiBara/camera/image_raw'),
