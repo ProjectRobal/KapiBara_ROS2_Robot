@@ -1,9 +1,12 @@
 services:
-  mqtt:
-    container_name: mqtt_broker
-    image: emqx/nanomq:0.23
+  vec_db:
+    restart: unless-stopped
+    container_name: vec_db_qdrant
+    image: qdrant/qdrant
+
+    volumes:
+      - ./db/:/qdrant/storage:z
 
     ports:
-      - 1883:1883
-      - 8083:8083
-      - 8883:8883
+      - 6333:6333
+      - 6334:6334
