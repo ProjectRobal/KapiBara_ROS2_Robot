@@ -10,6 +10,8 @@ robot/src/workspace/build/*
 robot/src/workspace/sim_install/*
 robot/src/workspace/sim_build/*
 
+db
+
 *.pdf
 *.gv
 
