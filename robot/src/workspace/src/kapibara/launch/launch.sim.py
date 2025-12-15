@@ -102,16 +102,6 @@ def generate_launch_description():
         output='screen'
     )
     
-    mqtt_bridge = Node(
-        package="mqtt_bridge",
-        executable="mqtt_bridge",
-        parameters=[{"stop_mind_enable":False}],
-        remappings=[
-            ('microphone','/KapiBara/mic'),
-        ],
-        namespace=""
-    )
-    
     parameters=[{
           'use_sim_time': True,
           'frame_id':'KapiBara_base_link',
@@ -158,9 +148,7 @@ def generate_launch_description():
         joint_broad_spawner,
         ears_controller_spawner,
         # mind,
-        # mqtt_bridge,
         mic,
-        # voice_assitant
         rtabmap_odom,
         rtabmap_slam,
         rtabmap_viz

@@ -59,8 +59,9 @@ from emotion_estimer.face_data import FaceData,FaceObj
 
 import webrtcvad
 
-import sqlite3
-import sqlite_vec
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance,OrderBy,PayloadSchemaType
+from qdrant_client.http import models
 
 
 FACE_TOLERANCE = 0.94
@@ -70,53 +71,49 @@ class FaceSqlite:
     
     def __init__(self) -> None:
         
-        self.db = sqlite3.connect("faces.db")
-        self.db.enable_load_extension(True)
-        sqlite_vec.load(self.db)
-        self.db.enable_load_extension(False)
+        self.db = QdrantClient(host='0.0.0.0',port=6333)
+        
+        # self.db.delete_collection(
+        #     collection_name="faces"
+        # )
         
         self.init_databse()
         
     def init_databse(self):
         
-        self.db.execute(
-            """
-                CREATE VIRTUAL TABLE IF NOT EXISTS vec_faces USING vec0(
-                score FLOAT,
-                time INT64,
-                face_embedding FLOAT[160]
-                );
-            """
-        )
+        if not self.db.collection_exists("faces"):
+            self.db.create_collection(
+                collection_name="faces",
+                vectors_config=VectorParams(size=160, distance=Distance.COSINE),
+            )
+            
+            self.db.create_payload_index(
+                collection_name="faces",
+                field_name="time",
+                field_schema=PayloadSchemaType.INTEGER
+            )
+            
+            self.db.create_payload_index(
+                collection_name="faces",
+                field_name="score",
+                field_schema=PayloadSchemaType.INTEGER
+            )
     
     def get_face(self,face_embedding:np.ndarray):
-        rows = self.db.execute(
-                """
-                SELECT
-                    rowid,
-                    score,
-                    distance
-                FROM vec_faces
-                WHERE face_embedding MATCH ?
-                ORDER BY distance
-                LIMIT 3
-                """,
-                [face_embedding.tobytes()],
-            ).fetchall()
         
-        for row in rows:
-            if row[2] < 0.1:
-                return row
+        hits = self.db.query_points(
+            collection_name="faces",
+            query=face_embedding,
+            limit=3
+        )
+        
+        for hit in hits.points:
+            if hit.score < 0.1:
+                return hit.payload
             
     def check_size(self):
         
-        rows = self.db.execute(
-            """
-            SELECT COUNT(*) FROM vec_faces;
-            """
-        ).fetchall()
-        
-        return rows[0][0]
+        return self.db.count("faces").count
         
     def update_face(self,face_embedding:np.ndarray,score:float):
         
@@ -125,50 +122,62 @@ class FaceSqlite:
         size = self.check_size()
         
         if size >= 500:
-            rows = self.db.execute(
-                """
-                SELECT rowid,time FROM vec_faces ORDER BY time LIMIT 1;
-                """
-            ).fetchall()
             
-            id = rows[0][0]
-            
-            with self.db:
-                self.db.execute(
-                    """
-                    UPDATE vec_faces SET score = ?, face_embedding = ? WHERE rowid = ?;
-                    """,
-                    [score,face_embedding.tobytes(),id]
+            results = self.db.scroll(
+                collection_name="faces",
+                limit=1,
+                order_by=OrderBy(
+                    key="time",
+                    direction="asc"
                 )
+            )
+                        
+            results = results[0][0]
+                                                
+            id = results.id
+            
+            payload = results.payload
+            
+            payload["score"] = score
+            payload["time"] = time.time_ns()
+            
+            self.db.upsert(
+                collection_name="faces",
+                points=[
+                    models.PointStruct(
+                        id=id,
+                        vector=face_embedding,
+                        payload=payload  # new payload
+                    )
+                ]
+            )
+            
+            return
             
         
         # check if face exists
-        
         face = self.get_face(face_embedding)
         
-        if face is None:
-            with self.db:
-                self.db.execute(
-                    """
-                    INSERT INTO vec_faces(score, time, face_embedding) VALUES(?, ?, ?);      
-                    """,
-                    [score,time.time_ns(),face_embedding.tobytes()]
-                    )
-        else:
-            
-            id = face[0]
-            
-            with self.db:
-                self.db.execute(
-                    """
-                    UPDATE vec_faces SET score = ? WHERE rowid = ?;
-                    """,
-                    [score,id]
+        id = size+1
+        
+        if face is not None:
+            id = face.id
+                        
+        payload = {}
+        
+        payload["score"] = score
+        payload["time"] = time.time_ns()
+        
+        self.db.upsert(
+            collection_name="faces",
+            points=[
+                models.PointStruct(
+                    id=size+1,
+                    vector=face_embedding,
+                    payload=payload  # new payload
                 )
-            
-            
-    def __del__(self):
-        self.db.commit()
+            ]
+        )
 
 
 class EmotionEstimator(Node):
