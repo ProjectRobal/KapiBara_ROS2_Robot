@@ -200,7 +200,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /KapiBara/map_points
+        Value: /KapiBara/cloud_map
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -284,7 +284,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 13.89327335357666
+      Distance: 20.54446029663086
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -299,10 +299,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5853980183601379
+      Pitch: 0.4153980016708374
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.592196464538574
+      Yaw: 4.645381450653076
     Saved: ~
 Window Geometry:
   Displays:

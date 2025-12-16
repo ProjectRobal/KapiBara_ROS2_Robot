@@ -24,8 +24,6 @@ def generate_launch_description():
 
     gazebo_env = SetEnvironmentVariable("GAZEBO_MODEL_PATH", os.path.join(get_package_prefix("kapibara"), "share"))
     
-    orb_wrapper_pkg = get_package_share_directory('orb_slam3_ros2_wrapper')
-
     # Configure the node
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
@@ -40,13 +38,13 @@ def generate_launch_description():
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py',)]),
             launch_arguments={
-                'world': '/app/src/rviz/playground.sdf',
+                'world': '/app/src/rviz/small_house.world',
                 'params_file': os.path.join(get_package_share_directory(pkg_name),"config/gazebo.yaml"),
                 }.items()
         )
 
     spawn = Node(package='gazebo_ros', executable='spawn_entity.py',
-                    arguments=["-topic","/KapiBara/robot_description","-entity","kapibara","-timeout","240","-z","1"],
+                    arguments=["-topic","/KapiBara/robot_description","-entity","kapibara","-timeout","240","-z","0.0","-y","-4.5","-x","-3.5"],
                     output='screen')
     
     diff_drive_spawner = Node(
@@ -110,7 +108,7 @@ def generate_launch_description():
           'odom_frame_id': 'KapiBara_odom',
           'publish_tf':True,
           'approx_sync':True,
-          'database_path':'/app/src/map/rtabmap.db'
+        #   'database_path':'/app/src/map/rtabmap.db'
           }]
     
     remappings=[

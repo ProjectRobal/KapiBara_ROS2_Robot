@@ -7,3 +7,4 @@ QT_QPA_PLATFORM=xcb
 UDEV=on
 BUILD_LOCATION=./sim_build
 INSTALL_LOCATION=./sim_install
+GAZEBO_MODEL_PATH=/app/src/rviz/models
