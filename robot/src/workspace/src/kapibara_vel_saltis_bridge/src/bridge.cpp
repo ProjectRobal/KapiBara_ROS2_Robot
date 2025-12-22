@@ -182,7 +182,9 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
                     auto _imu = sensor_msgs::msg::Imu();
 
-                    _imu.header.frame_id = "imu_link";
+                    _imu.header.frame_id = "KapiBara_imu_link";
+                    _imu.header.stamp = node->get_clock()->now();
+
 
                     _imu.orientation.x = fusion->x;
                     _imu.orientation.y = fusion->y;
@@ -212,7 +214,8 @@ void can_task(std::shared_ptr<BridgeNode> node,uint64_t tofCount)
 
                     auto field = sensor_msgs::msg::MagneticField();
 
-                    field.header.frame_id = "/imu";
+                    field.header.frame_id = "KapiBara_imu_link";
+                    field.header.stamp = node->get_clock()->now();
 
                     field.magnetic_field.x = mag->x;
                     field.magnetic_field.y = mag->y;

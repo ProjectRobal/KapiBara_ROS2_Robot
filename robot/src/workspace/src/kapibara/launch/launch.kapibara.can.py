@@ -213,13 +213,16 @@ def generate_launch_description():
           'odom_frame_id': 'KapiBara_odom',
           'publish_tf':True,
           'approx_sync':True,
-        #   'database_path':'/app/src/map/rtabmap.db'
+          'database_path':'/app/src/map/rtabmap.db',
+          'Odom/ResetCountdown':'1',
+          'Rtabmap/StartNewMapOnLoopClosure':"true"
           }]
     
     remappings=[
-          ('rgb/image', '/KapiBara/image_raw'),
-          ('rgb/camera_info', '/KapiBara/camera_info'),
-          ('depth/image', '/KapiBara/depth/image_raw')]
+          ('rgb/image', 'image_raw'),
+          ('rgb/camera_info', 'camera_info'),
+          ('depth/image', 'depth/image_raw'),
+          ('imu','imu1')]
     
     rtabmap_odom = Node(
             package='rtabmap_odom', executable='rgbd_odometry', output='screen',
@@ -239,7 +242,7 @@ def generate_launch_description():
             rtabmap_odom,
             rtabmap_slam
            ],
-        period=20.0
+        period=15.0
     )
     
     rtabmap_after_start = RegisterEventHandler(
