@@ -206,11 +206,48 @@ def generate_launch_description():
         )
     ) 
     
-    mqtt_bridge = Node(
-        package="mqtt_bridge",
-        executable="mqtt_bridge",
-        namespace=""
+    parameters=[{
+          'frame_id':'KapiBara_base_link',
+          'subscribe_depth':True,
+          'subscribe_odom_info':True,
+          'odom_frame_id': 'KapiBara_odom',
+          'publish_tf':True,
+          'approx_sync':True,
+        #   'database_path':'/app/src/map/rtabmap.db'
+          }]
+    
+    remappings=[
+          ('rgb/image', '/KapiBara/image_raw'),
+          ('rgb/camera_info', '/KapiBara/camera_info'),
+          ('depth/image', '/KapiBara/depth/image_raw')]
+    
+    rtabmap_odom = Node(
+            package='rtabmap_odom', executable='rgbd_odometry', output='screen',
+            parameters=parameters,
+            remappings=remappings,
+            namespace="KapiBara")
+
+    rtabmap_slam = Node(
+            package='rtabmap_slam', executable='rtabmap', output='screen',
+            parameters=parameters,
+            remappings=remappings,
+            arguments=['-d'],
+            namespace="KapiBara")
+    
+    delayed_rtabmap= TimerAction(
+       actions=[
+            rtabmap_odom,
+            rtabmap_slam
+           ],
+        period=20.0
     )
+    
+    rtabmap_after_start = RegisterEventHandler(
+        event_handler=OnProcessStart(
+            target_action=start_sequence,
+            on_start=[delayed_rtabmap]
+        )
+    ) 
     
     # Run the node
     return LaunchDescription([
@@ -231,7 +268,7 @@ def generate_launch_description():
         # emotions_after_mind,
         # emotions_after_start,
         camera_after_start_seq,
-        mqtt_bridge
+        rtabmap_after_start
     ])
 
 

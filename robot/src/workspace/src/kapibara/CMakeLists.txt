@@ -49,7 +49,9 @@ install(
 ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
+  scripts/map_mind.py
   scripts/sensor_broadcaster.py
+  scripts/map_scene.py
   scripts/imu_calib.py
   scripts/quanterion_decoder.py
   DESTINATION lib/${PROJECT_NAME}

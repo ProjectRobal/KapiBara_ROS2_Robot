@@ -68,36 +68,13 @@ def generate_launch_description():
         arguments=["ears_controller",'--controller-manager-timeout','240'],
     )
 
-    emotions = Node(
-        package="emotion_estimer",
-        executable="estimator.py",
+    map_mapper = Node(
+        package="kapibara",
+        executable="map_scene.py",
         namespace="KapiBara",
         parameters=[{
             "sim":True
         }]
-    )
-    
-    mind = Node(
-        package="kapibara_mind",
-        executable="mind",
-        namespace="KapiBara",
-        parameters=[
-            {
-                "max_linear_speed":0.4,
-                "max_angular_speed":2.5,
-                "angular_p":4.0,
-                "angular_i":2.0
-            }
-        ]
-    )
-    
-    mic = Node(
-        package="microphone",
-        executable="mic.py",
-        namespace = 'KapiBara',
-        arguments=[],
-        parameters=[{"channels":2,"sample_rate":44100,"chunk_size":4096,"device_id":5}],
-        output='screen'
     )
     
     parameters=[{
@@ -108,7 +85,10 @@ def generate_launch_description():
           'odom_frame_id': 'KapiBara_odom',
           'publish_tf':True,
           'approx_sync':True,
-        #   'database_path':'/app/src/map/rtabmap.db'
+          'database_path':'/app/src/map/rtabmap.db',
+          'Odom/ResetCountdown':'1',
+          'Rtabmap/StartNewMapOnLoopClosure':"true"
+          
           }]
     
     remappings=[
@@ -148,14 +128,11 @@ def generate_launch_description():
     return LaunchDescription([
         gazebo,
         node_robot_state_publisher,
-        #rviz,
         spawn,
-        # emotions,
         diff_drive_spawner,
         joint_broad_spawner,
         ears_controller_spawner,
-        # mind,
-        mic,
+        map_mapper,
         delayed_rtabmap
     ])
 
