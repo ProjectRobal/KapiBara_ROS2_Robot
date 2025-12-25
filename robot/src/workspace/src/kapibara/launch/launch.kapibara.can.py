@@ -215,11 +215,16 @@ def generate_launch_description():
           'approx_sync':True,
           'database_path':'/app/src/map/rtabmap.db',
           'Odom/ResetCountdown':'1',
-          'Rtabmap/StartNewMapOnLoopClosure':"true"
+          'Rtabmap/StartNewMapOnLoopClosure':"true",
+          "Odom/Strategy": "0",
+          "Vis/CorType": "1",
+          "OdomF2M/MaxSize": "1000",
+          "Vis/MaxFeatures": "600",
+          "GFTT/MinDistance": "10"
           }]
     
     remappings=[
-          ('rgb/image', 'image_raw'),
+          ('rgb/image', '/image_raw'),
           ('rgb/camera_info', 'camera_info'),
           ('depth/image', 'depth/image_raw'),
           ('imu','imu1')]

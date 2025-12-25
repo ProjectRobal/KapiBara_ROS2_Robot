@@ -77,20 +77,6 @@ def generate_launch_description():
         }]
     )
     
-    mind = Node(
-        package="kapibara_mind",
-        executable="mind",
-        namespace="KapiBara",
-        parameters=[
-            {
-                "max_linear_speed":0.4,
-                "max_angular_speed":2.5,
-                "angular_p":4.0,
-                "angular_i":2.0
-            }
-        ]
-    )
-    
     mic = Node(
         package="microphone",
         executable="mic.py",
@@ -98,6 +84,22 @@ def generate_launch_description():
         arguments=[],
         parameters=[{"channels":2,"sample_rate":44100,"chunk_size":4096,"device_id":5}],
         output='screen'
+    )
+    
+    map_mind = Node(
+        package="kapibara",
+        executable="map_mind.py",
+        namespace="KapiBara",
+        arguments=[],
+        parameters=[{
+            'use_sim_time': True,
+        }],
+        remappings=[
+            ('cmd_vel','motors/cmd_vel'),
+            ('camera','camera/image_raw'),
+            ('depth','camera/depth/image_raw'),
+            ('points','camera/points')
+        ]
     )
     
     parameters=[{
@@ -108,13 +110,21 @@ def generate_launch_description():
           'odom_frame_id': 'KapiBara_odom',
           'publish_tf':True,
           'approx_sync':True,
-        #   'database_path':'/app/src/map/rtabmap.db'
+          'database_path':'/app/src/map/rtabmap.db',
+        'Odom/ResetCountdown':'1',
+          'Rtabmap/StartNewMapOnLoopClosure':"true",
+          "Odom/Strategy": "0",
+          "Vis/CorType": "1",
+          "OdomF2M/MaxSize": "1000",
+          "Vis/MaxFeatures": "600",
+          "GFTT/MinDistance": "10"
+          
           }]
     
     remappings=[
-          ('rgb/image', '/KapiBara/camera/image_raw'),
-          ('rgb/camera_info', '/KapiBara/camera/camera_info'),
-          ('depth/image', '/KapiBara/camera/depth/image_raw')]
+          ('rgb/image', 'camera/image_raw'),
+          ('rgb/camera_info', 'camera/camera_info'),
+          ('depth/image', 'camera/depth/image_raw')]
     
     rtabmap_odom = Node(
             package='rtabmap_odom', executable='rgbd_odometry', output='screen',
@@ -139,7 +149,7 @@ def generate_launch_description():
        actions=[
             rtabmap_odom,
             rtabmap_slam,
-            rtabmap_viz
+            # rtabmap_viz
            ],
         period=10.0
     )
@@ -154,9 +164,9 @@ def generate_launch_description():
         diff_drive_spawner,
         joint_broad_spawner,
         ears_controller_spawner,
-        # mind,
         mic,
-        delayed_rtabmap
+        map_mind,
+        # delayed_rtabmap
     ])
 
 

@@ -8,6 +8,8 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Range,Imu,PointCloud2
 from geometry_msgs.msg import Quaternion
 
+from std_msgs.msg import Float64MultiArray
+
 from kapibara_interfaces.msg import Emotions
 from kapibara_interfaces.msg import Microphone
 from kapibara_interfaces.msg import PiezoSense
@@ -24,55 +26,165 @@ from kapibara_interfaces.msg import FaceEmbed
 
 from kapibara_interfaces.srv import StopMind
 
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs_py import point_cloud2
+
+import webrtcvad
+
 import cv2
 from cv_bridge import CvBridge
 
 import numpy as np
 
+from timeit import default_timer as timer
+import time
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance,OrderBy,PayloadSchemaType
 from qdrant_client.http import models
 
-EMBEDDING_SHAPE = (32*3,32)
-ACTION_SET_NAME = "actions_sets"
 
-def generate_embedding(img):
+ID_TO_EMOTION_NAME = [
+    "angry",
+    "fear",
+    "happiness",
+    "uncertainty",
+    "boredom"
+    ]
+
+IMG_EMBEDDING_SHAPE = 32*32*4
+IMG_ACTION_SET_NAME = "actions_sets"
+
+def generate_embedding(img,depth):
     
-    img_in = cv2.resize(img,(224,224),interpolation=cv2.INTER_AREA)
+    img_res = cv2.resize(img,(32,32))
     
-    img_in = cv2.cvtColor(img_in, cv2.COLOR_BGR2GRAY)
+    depth_res = cv2.resize(depth,(32,32)) 
     
-    edges = cv2.Canny(img_in, 200, 300)
+    depth_flatten = depth_res.astype(np.float32).flatten()
+                
+    img_flatten = img_res.astype(np.float32).flatten() / 255.0
+    
+    embedding = np.concatenate((img_flatten,depth_flatten))
+    
+    return embedding
+
+
+FACE_TOLERANCE = 0.94
+
+
+class FaceSqlite:
+    
+    def __init__(self,db) -> None:
         
-    ksize = 3              # Kernel size (odd number)
-    sigma = 4.0             # Standard deviation of Gaussian
-    lambd = 10.0            # Wavelength
-    gamma = 1.0            # Aspect ratio
-    
-    gabor_img = np.zeros((224,224),dtype=np.float32)
+        self.db = db
         
-    for theta in np.arange(0, np.pi, np.pi / 4):
-        kernel = cv2.getGaborKernel(
-            (ksize, ksize),
-            sigma=sigma,
-            theta=theta,
-            lambd=lambd,
-            gamma=gamma,
-            psi=0
+        # self.db.delete_collection(
+        #     collection_name="faces"
+        # )
+        
+        self.init_databse()
+        
+    def init_databse(self):
+        
+        if not self.db.collection_exists("faces"):
+            self.db.create_collection(
+                collection_name="faces",
+                vectors_config=VectorParams(size=160, distance=Distance.COSINE),
+            )
+            
+            self.db.create_payload_index(
+                collection_name="faces",
+                field_name="time",
+                field_schema=PayloadSchemaType.INTEGER
+            )
+            
+            self.db.create_payload_index(
+                collection_name="faces",
+                field_name="score",
+                field_schema=PayloadSchemaType.INTEGER
+            )
+    
+    def get_face(self,face_embedding:np.ndarray):
+        
+        hits = self.db.query_points(
+            collection_name="faces",
+            query=face_embedding,
+            limit=3
         )
-        gabor_img += cv2.filter2D(img_in, cv2.CV_32F, kernel)
         
-    gabor_img = cv2.normalize(gabor_img, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8U)
-    
-    img_in_sm = cv2.resize(img_in,(32,32),interpolation=cv2.INTER_AREA)
-    
-    edges_sm = cv2.resize(edges,(32,32),interpolation=cv2.INTER_AREA)
-    
-    gabor_img_sm = cv2.resize(gabor_img,(32,32),interpolation=cv2.INTER_AREA)
-    
-    embedding_img = cv2.hconcat([img_in_sm,edges_sm,gabor_img_sm])
-    
-    return embedding_img
+        for hit in hits.points:
+            if hit.score < 0.1:
+                return hit.payload
+            
+    def check_size(self):
+        
+        return self.db.count("faces").count
+        
+    def update_face(self,face_embedding:np.ndarray,score:float):
+        
+        # check size
+        
+        size = self.check_size()
+        
+        if size >= 500:
+            
+            results = self.db.scroll(
+                collection_name="faces",
+                limit=1,
+                order_by=OrderBy(
+                    key="time",
+                    direction="asc"
+                )
+            )
+                        
+            results = results[0][0]
+                                                
+            id = results.id
+            
+            payload = results.payload
+            
+            payload["score"] = score
+            payload["time"] = time.time_ns()
+            
+            self.db.upsert(
+                collection_name="faces",
+                points=[
+                    models.PointStruct(
+                        id=id,
+                        vector=face_embedding,
+                        payload=payload  # new payload
+                    )
+                ]
+            )
+            
+            return
+            
+        
+        # check if face exists
+        face = self.get_face(face_embedding)
+        
+        id = size+1
+        
+        if face is not None:
+            id = face.id
+                        
+        payload = {}
+        
+        payload["score"] = score
+        payload["time"] = time.time_ns()
+        
+        self.db.upsert(
+            collection_name="faces",
+            points=[
+                models.PointStruct(
+                    id=size+1,
+                    vector=face_embedding,
+                    payload=payload  # new payload
+                )
+            ]
+        )
+
 
 
 class MapMind(Node):
@@ -89,16 +201,40 @@ class MapMind(Node):
         
         self.twist_pub = self.create_publisher(Twist, 'cmd_vel', 10)
         
+        self.emotion_pub = self.create_publisher(Emotions,'emotions', 10)
+        
+        self.spectogram_publisher = self.create_publisher(Image, 'spectogram', 10)
+        
         timer_period = self.get_parameter('tick_time').get_parameter_value().double_value  # seconds
         self.timer = self.create_timer(timer_period, self.tick_callback)
         
         self.image_sub = self.create_subscription(
-            CompressedImage,
+            Image,
             'camera',
             self.image_callback,
             10)
         
-        self.img_embedding = np.zeros(EMBEDDING_SHAPE,dtype=np.uint8)
+        self.image_sub = self.create_subscription(
+            Image,
+            'depth',
+            self.depth_image_callback,
+            10)
+        
+        self.points_sub = self.create_subscription(
+            PointCloud2,
+            'points',
+            self.points_callback,
+            10)
+        
+        self.ext_emotion_sub = self.create_subscription(
+            Emotions,
+            'ext_emotion',
+            self.ext_emotion_callback,
+            10)
+        
+        self.mic_subscripe = self.create_subscription(Microphone,'mic',self.mic_callback,10)
+        
+        self.img_embedding = np.zeros(IMG_EMBEDDING_SHAPE,dtype=np.uint8)
         
         self.bridge = CvBridge()
         
@@ -106,22 +242,57 @@ class MapMind(Node):
         
         self.initialize_db()
         
+        self.face_db = FaceSqlite(self.db)
+                
         self.emotion_state = 0.0
         
-        self.last_embedding = np.zeros(EMBEDDING_SHAPE,dtype=np.uint8)
+        self.last_img_embedding = np.zeros(IMG_EMBEDDING_SHAPE,dtype=np.uint8)
         
         self.action_list = []
         self.action_executing = False
         self.action_iter = iter(self.action_list)
         
-    def initialize_db(self):
+        self.image = None
+        self.depth = None
         
-        if not self.db.collection_exists(ACTION_SET_NAME):
-            self.get_logger().warning("Action set database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=ACTION_SET_NAME,
-                vectors_config=VectorParams(size=EMBEDDING_SHAPE[0]*EMBEDDING_SHAPE[1], distance=Distance.EUCLID),
+        self.emotion = Emotions()
+        
+        # emotion state from external sources
+        self.ext_emotion = Emotions()
+        
+        self.obstacle_detected = False
+        
+        self.vad = webrtcvad.Vad()
+        self.vad.set_mode(1)
+        
+        self.audio_fear = 0
+        
+        self.mic_buffor = np.zeros(2*16000,dtype=np.float32)
+        
+        # angry
+        # fear
+        # happiness
+        # uncertainty
+        # boredom 
+        # anguler values for each emotions state
+        self.emotions_angle=[0.0,180.0,25.0,145.0,90.0] 
+        
+        self.ears_publisher = self.create_publisher(
+            Float64MultiArray,
+            'ears_controller/commands', 
+            10
             )
+        
+    def initialize_db(self):
+                
+        if not self.db.collection_exists(IMG_ACTION_SET_NAME):
+            self.get_logger().warning("Image action set database not exist, creating new one!")
+            self.db.create_collection(
+                collection_name=IMG_ACTION_SET_NAME,
+                vectors_config=VectorParams(size=IMG_EMBEDDING_SHAPE, distance=Distance.EUCLID),
+            )
+        
+        
     
     def send_command(self,linear:float,angular:float):
         
@@ -141,32 +312,151 @@ class MapMind(Node):
     def stop(self):
         self.send_command(0.0,0.0)
         
-    def image_callback(self,msg:CompressedImage):
+    def mic_callback(self,mic:Microphone):
         
-        self.get_logger().debug('I got image with format: %s' % msg.format)
+        self.get_logger().debug("Mic callback")
+        # I have to think about it
         
-        image = self.bridge.compressed_imgmsg_to_cv2(msg)
+        self.mic_buffor = np.roll(self.mic_buffor,mic.buffor_size)
         
-        self.img_embedding = generate_embedding(image)
+        left = np.array(mic.channel1,dtype=np.float32)/np.iinfo(np.int32).max
+        right = np.array(mic.channel2,dtype=np.float32)/np.iinfo(np.int32).max
         
-    def emotion_callabck(self,msg:Emotions):
-        self.get_logger().debug("Got emotions")
+        combine = ( left + right ) / 2.0
         
-        self.emotion_state = msg.happiness*320.0 + msg.fear*-120.0 + msg.uncertainty*-40.0 + msg.angry*-60.0 + msg.boredom*-20.0
+        self.mic_buffor[:mic.buffor_size] = combine[:]
         
-    def tick_callback(self):
-        self.get_logger().info('Mind tick')
+        start = timer()
+        
+        # speech_detect = self.vad.is_speech(self.mic_buffor, 16000)
+        
+        # if speech_detect:
+        #     self.uncertain_speech = 1.0
+        # We are going to replace it with something simpler
+        # output,spectogram = self.hearing.input(self.mic_buffor)
+        
+        nperseg = 255
+        noverlap = nperseg - 128 # 255 - 128 = 127
+
+        # Calculate the spectrogram
+        # f: array of sample frequencies
+        # t_spec: array of segment times
+        # Sxx: Spectrogram of x. By default, the last axis of Sxx corresponds to the segment times.
+        # f, t_spec, _spectogram = spectrogram(self.mic_buffor, fs=16000, nperseg=nperseg, noverlap=noverlap)
+                
+        # _spectogram = cv2.normalize(_spectogram,None,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        
+        # publish last spectogram
+        # self.spectogram_publisher.publish(self.bridge.cv2_to_imgmsg(_spectogram))
+                
+        self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
+        
+        # self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
+        
+        # self.audio_output = output
+        
+        mean = np.mean(np.abs(combine))
+        
+        if mean >= 0.7:
+            self.audio_fear = 1.0
+            
+    def ext_emotion_callback(self,msg:Emotions):
+        self.ext_emotion = msg
+                
+    def depth_image_callback(self,msg:Image):
+        
+        self.get_logger().info('I got depth image with format: %s' % msg.encoding)
+        
+        self.depth = self.bridge.imgmsg_to_cv2(msg)
+        
+    def image_callback(self,msg:Image):
+        
+        self.get_logger().info('I got image with format: %s' % msg.encoding)
+        
+        self.image = self.bridge.imgmsg_to_cv2(msg)
+                
+    def points_callback(self, msg: PointCloud2):
+        # Read points from PointCloud2
+        points = point_cloud2.read_points_numpy(
+            msg,
+            field_names=("x", "y", "z"),
+            skip_nans=True,
+            reshape_organized_cloud=True
+        )
+        
+        sorted_points = np.sort(points)
+        
+        min_points = np.mean(sorted_points[0:10])
+        
+        self.obstacle_detected = min_points < 0.0
+        
+        if self.obstacle_detected:    
+            self.get_logger().info(f'Obstacle detected!')
+            
+    def emotion_state_calculate(self,emotions):
+                
+        return  emotions[2]*320.0 + emotions[1]*-120.0 + emotions[3]*-40.0 + emotions[0]*-60.0 + emotions[4]*-20.0
+        
+    def send_ears_state(self,emotions):
+        
+        max_id = 4
+        
+        if np.sum(emotions) >= 0.01:
+            max_id = np.argmax(emotions[:4])
+            
+        self.get_logger().debug("Current emotion: "+str(ID_TO_EMOTION_NAME[max_id]))
+            
+        self.get_logger().debug("Sending angle to ears: "+str(self.emotions_angle[max_id]))
+        
+        angle:float = (self.emotions_angle[max_id]/180.0)*np.pi
+        
+        array=Float64MultiArray()
+        
+        array.data=[np.pi - angle, angle]
+        
+        self.ears_publisher.publish(array)
+    
+    
+    def tick_func(self):
+        # emotion validation pipeline
+        
+        # face detection
+        
+        # evaluate emotion states
+        
+        emotions = Emotions()
+        
+        emotions_arr = [
+            self.emotion.angry + self.ext_emotion.angry,
+            self.emotion.fear + self.ext_emotion.fear,
+            self.emotion.happiness + self.ext_emotion.happiness,
+            self.emotion.uncertainty + self.ext_emotion.uncertainty,
+            self.emotion.boredom + self.ext_emotion.boredom
+        ]
+        
+        emotions.angry = emotions_arr[0]
+        emotions.fear = emotions_arr[1]
+        emotions.happiness = emotions_arr[2]
+        emotions.uncertainty = emotions_arr[3]
+        emotions.boredom = emotions_arr[4]
+        
+        self.emotion_pub.publish(emotions)
+        
+        score = self.emotion_state_calculate(emotions_arr)
+        
+        # send ears position
+        self.send_ears_state(emotions_arr)
         
         if self.action_executing:
             action = next(self.action_iter,None)
             
-            if self.emotion_state < -0.25:
+            if score < -0.25:
                 # perform crossover and mutations
                 self.action_executing = False
                 self.stop()
                 return
             
-            if action is None or self.emotion_state > 0.0:
+            if action is None or score > 0.0:
                 # perform action set trim
                 self.action_executing = False
                 self.stop()
@@ -176,22 +466,41 @@ class MapMind(Node):
             
             return
         
-        if self.emotion_state >= 0.0:
-            self.stop()
-            return
+        # if score >= 0.0:
+        #     self.stop()
+        #     return
         
-        self.last_embedding = self.img_embedding
+        # generate embedding for image
         
-        hits = self.db.query_points(
-            collection_name=ACTION_SET_NAME,
-            query=self.last_embedding,
-            limit=10
-        )
+        if self.image is not None and self.depth is not None:
+                    
+            self.last_img_embedding = generate_embedding(self.image,self.depth)
+            
+            # get actions lists associated with it
+            
+            hits = self.db.query_points(
+                collection_name=IMG_ACTION_SET_NAME,
+                query=self.last_img_embedding,
+                limit=10
+            )
+            
+            points = hits.points
+            
+            self.get_logger().info(f'Points: {points}')
+        else:
+            self.get_logger().warning('No visual data!')
         
-        points = hits.points
         
+    def tick_callback(self):
+        self.get_logger().info('Mind tick')
         
+        start = timer()
         
+        self.tick_func()
+        
+        end = timer()
+        
+        self.get_logger().info(f'Tick inference time {end - start} s')
         
 
 def main(args=None):
