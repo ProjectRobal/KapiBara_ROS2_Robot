@@ -136,7 +136,7 @@ def generate_launch_description():
             package='rtabmap_slam', executable='rtabmap', output='screen',
             parameters=parameters,
             remappings=remappings,
-            arguments=['-d'],
+            # arguments=['-d'],
             namespace="KapiBara")
 
     rtabmap_viz = Node(
@@ -148,7 +148,7 @@ def generate_launch_description():
     delayed_rtabmap= TimerAction(
        actions=[
             rtabmap_odom,
-            rtabmap_slam,
+            # rtabmap_slam,
             # rtabmap_viz
            ],
         period=10.0
@@ -166,7 +166,7 @@ def generate_launch_description():
         ears_controller_spawner,
         mic,
         map_mind,
-        # delayed_rtabmap
+        delayed_rtabmap
     ])
 
 

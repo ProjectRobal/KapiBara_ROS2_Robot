@@ -10,6 +10,8 @@ from geometry_msgs.msg import Quaternion
 
 from std_msgs.msg import Float64MultiArray
 
+from kapibara.DeepIDTFLite import DeepIDTFLite
+
 from kapibara_interfaces.msg import Emotions
 from kapibara_interfaces.msg import Microphone
 from kapibara_interfaces.msg import PiezoSense
@@ -28,6 +30,8 @@ from kapibara_interfaces.srv import StopMind
 
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
+
+from ultralytics import YOLO
 
 import webrtcvad
 
@@ -54,7 +58,13 @@ ID_TO_EMOTION_NAME = [
     ]
 
 IMG_EMBEDDING_SHAPE = 32*32*4
+ML_SPECTOGRAM_EMBEDDING_SHAPE = 0
+
+# month, day, hour, minute, second
+TIME_EMBEDDING_SHAPE = 5
+
 IMG_ACTION_SET_NAME = "actions_sets"
+SPECTOGRAM_ACTION_NAME = "ml_actions_sets"
 
 def generate_embedding(img,depth):
     '''
@@ -98,12 +108,8 @@ class FaceSqlite:
         
         self.db = db
         
-        # self.db.delete_collection(
-        #     collection_name="faces"
-        # )
-        
         self.init_databse()
-        
+                
     def init_databse(self):
         
         if not self.db.collection_exists("faces"):
@@ -215,8 +221,19 @@ class MapMind(Node):
         self.declare_parameter('max_angular_speed', 2.0)
         self.declare_parameter('tick_time', 0.05)
         
+        self.declare_parameter('yolo_model_path','models/yolov11n-face.pt')
+        self.declare_parameter('deepid_model_path','models/deepid.tflite')
+        
         self.max_linear_speed = self.get_parameter('max_linear_speed').get_parameter_value().double_value
         self.max_angular_speed = self.get_parameter('max_angular_speed').get_parameter_value().double_value
+        
+        yolo_model_path = self.get_parameter('yolo_model_path').get_parameter_value().string_value
+        
+        self.face_yolo = YOLO(yolo_model_path)
+        
+        deepid_model_path = self.get_parameter('deepid_model_path').get_parameter_value().string_value
+        
+        self.deep_id = DeepIDTFLite(filepath=deepid_model_path)
         
         self.twist_pub = self.create_publisher(Twist, 'cmd_vel', 10)
         
@@ -255,11 +272,15 @@ class MapMind(Node):
                 
         self.bridge = CvBridge()
         
+        self.current_face_embeddings = []
+        
         self.db = QdrantClient(host='0.0.0.0',port=6333)
         
         self.initialize_db()
         
         self.face_db = FaceSqlite(self.db)
+        
+        self.pat_detected = 0.0
                 
         self.emotion_state = 0.0
         
@@ -267,7 +288,7 @@ class MapMind(Node):
         
         self.action_list = []
         self.action_executing = False
-        self.action_iter = iter(self.action_list)
+        self.action_iter = 0
         
         self.image = None
         self.depth = None
@@ -303,14 +324,21 @@ class MapMind(Node):
             10
             )
         
+    def reinitialize_db(self):
+        
+        self.db.delete_collection(IMG_ACTION_SET_NAME)
+        
+        self.initialize_db()
+        
     def initialize_db(self):
-                        
+                                
         if not self.db.collection_exists(IMG_ACTION_SET_NAME):
             self.get_logger().warning("Image action set database not exist, creating new one!")
             self.db.create_collection(
                 collection_name=IMG_ACTION_SET_NAME,
                 vectors_config=VectorParams(size=IMG_EMBEDDING_SHAPE, distance=Distance.EUCLID),
             )
+        
         
         
     
@@ -417,6 +445,35 @@ class MapMind(Node):
         if self.obstacle_detected:    
             self.get_logger().info(f'Obstacle detected!')
             
+    def sense_callabck(self,sense:PiezoSense):
+        
+        # should be rewritten 
+        
+        pin_states = sense.pin_state
+        
+        patting_sense = pin_states[4]
+                
+        if patting_sense:
+            
+            self.get_logger().debug('Patting detected')
+                        
+            self.pat_detected = 1.0
+                        
+            score = 10
+                                                    
+            # self.stop_mind()
+                        
+            if score !=0 and len(self.current_face_embeddings)>0:
+                # check if spotted face are present in database:
+                    
+                # sort by distances from robot                
+                self.current_face_embeddings = sorted(self.current_face_embeddings,key=lambda x: x[1],reverse=True)
+                
+                nearest_face = self.current_face_embeddings[0]                
+                
+                out = self.face.update_face(nearest_face,score)
+                
+                            
     def emotion_state_calculate(self,emotions:list[float]):
                 
         return  emotions[2]*320.0 + emotions[1]*-120.0 + emotions[3]*-40.0 + emotions[0]*-60.0 + emotions[4]*-20.0
@@ -453,19 +510,23 @@ class MapMind(Node):
         new_id = self.db.count(IMG_ACTION_SET_NAME).count + 1
         
         for img_embedding in self.last_img_embeddings:
-            self.db.upsert(
-                collection_name=IMG_ACTION_SET_NAME,
-                points=[
-                        models.PointStruct(
-                            id = new_id,
-                            vector=img_embedding,
-                            payload = {
-                                    "score": score,
-                                    "actions": actions
-                                }
-                            )
-                    ]
-            )
+            
+            try:
+                self.db.upsert(
+                    collection_name=IMG_ACTION_SET_NAME,
+                    points=[
+                            models.PointStruct(
+                                id = new_id,
+                                vector=img_embedding,
+                                payload = {
+                                        "score": score,
+                                        "actions": actions
+                                    }
+                                )
+                        ]
+                )
+            except Exception as e:
+                self.get_logger().info(f"Exception during image update: {e}")
     
     def update_actions_for_embeddings(self,actions:list[tuple],score:float):
         
@@ -484,19 +545,23 @@ class MapMind(Node):
             # payloads for analazying
             
             for img_embedding in self.last_img_embeddings:
-            
-                hits = self.db.query_points(
-                    collection_name=IMG_ACTION_SET_NAME,
-                    query=img_embedding,
-                    limit=3
-                )
-            
-                points = hits.points
                 
-                for hit in points:
-                    if hit.score < 0.25:
-                        if self.check_actions_payload(hit.payload):
-                            actions_lists.append(hit.payload)
+                try:
+                            
+                    hits = self.db.query_points(
+                        collection_name=IMG_ACTION_SET_NAME,
+                        query=img_embedding,
+                        limit=3
+                    )
+                
+                    points = hits.points
+                    
+                    for hit in points:
+                        if hit.score < 0.25:
+                            if self.check_actions_payload(hit.payload):
+                                actions_lists.append(hit.payload)
+                except Exception as e:
+                    self.get_logger().info(f"Excpetion in image retrival: {e}")
             
                 # self.get_logger().info(f'Points: {points}')
         else:
@@ -514,8 +579,8 @@ class MapMind(Node):
             
             for i in range(action_count):
                 
-                v = np.random.random()
-                w = np.random.random()
+                v = 2*np.random.random() - 1
+                w = 2*np.random.random() - 1
                 
                 actions.append((v,w))
                 
@@ -525,48 +590,78 @@ class MapMind(Node):
         # when we incorporate map we will use more predictive 
         # retrival approach
         
-        actions.extend(actions_lists[0]["actions"])
-        actions.extend(actions_lists[1]["actions"])
+        a1 = actions_lists[0]["actions"]
+        a2 = actions_lists[1]["actions"]
         
-        # drop out
+        random.shuffle(a1)
+        random.shuffle(a2)
         
-        to_remove = []
-        
-        if len(actions) > 64:
-            action_mask = np.random.random(len(actions))
-            for i in range(len(actions)):
-                if action_mask[i] < 0.1:
-                    to_remove.append(i)
-                    
-        # for to_rem in to_remove:
-        #     actions.pop(to_rem)
-                    
-        action_mask = np.random.random(len(actions))
-        
+        actions.extend(a1[:int(np.ceil(len(a1)/2))])
+        actions.extend(a2[:int(np.ceil(len(a2)/2))])
+                            
         # perform mutations
         
-        for i in range(len(actions)):
-            if action_mask[i] < 0.1:
-                v = actions[i][0] + np.random.random()*0.1
-                w = actions[i][1] + np.random.random()*0.1
-                
-                actions[i] = (v,w)
+        self.mutate_actions(actions)
                     
         random.shuffle(actions)
         
         return actions
-        
-        
-        
     
+    def mutate_actions(self,actions:list[tuple],threshold:float = 0.1,mean:float = 0.1):
+        
+        action_mask = np.random.random(len(actions))
+        
+        for i in range(len(actions)):
+            if action_mask[i] < threshold:
+                v = actions[i][0] + (2*np.random.random()-1)*mean
+                w = actions[i][1] + (2*np.random.random()-1)*mean
+                
+                actions[i] = (v,w)
+                
     def tick_func(self):
         # emotion validation pipeline
         
         # face detection
         
+        faces = self.face_yolo(self.image)
+        
+        # mean_embed = np.zeros(160,dtype=np.float32)
+        
+        # sum_distances = 0
+        
+        # Maybe we should take into account only the closest
+        # face ?
+        
+        self.current_face_embeddings.clear()
+        
+        # examine resulted faces
+        for result in faces:
+            boxes = result.boxes
+            for box in boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                
+                width = x2 - x1
+                height = y2 - y1
+                
+                distance = width*height
+                
+                conf = box.conf[0]
+                cls = int(box.cls[0])
+                
+                img = self.image[y1:y2,x1:x2]
+                
+                embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
+
+                self.current_face_embeddings.append([embed,distance])
+        
         # evaluate emotion states
         
         emotions = Emotions()
+        
+        self.emotion.happiness = self.pat_detected*10.0
+        self.emotion.fear = self.obstacle_detected*1.0
+        
+        self.pat_detected = 0.0
         
         emotions_arr = [
             self.emotion.angry + self.ext_emotion.angry,
@@ -590,18 +685,25 @@ class MapMind(Node):
         self.send_ears_state(emotions_arr)
         
         if self.action_executing:
-            action = next(self.action_iter,None)
+            
+            action = self.action_list[self.action_iter]
+            
+            self.action_iter += 1
             
             if score < -0.25:
-                # perform crossover and mutations
+                # perform mutations
                 self.action_executing = False
                 self.stop()
+                
+                self.mutate_actions(self.action_list,threshold=0.25,mean=0.5)
                 
                 self.update_actions_for_embeddings(self.action_list,score)
                 return
             
-            if action is None or score > 0.0:
+            if self.action_iter == len(self.action_list) or score > 0.0:
                 # perform action set trim
+                self.action_list = self.action_list[:self.action_iter]
+                
                 self.action_executing = False
                 self.stop()
                 
@@ -615,9 +717,10 @@ class MapMind(Node):
         
         actions_lists = []
         
-        # if score >= 0.0:
-        #     self.stop()
-        #     return
+        # when our robot is calm there is no need to take any actions ...
+        if score >= 0.0:
+            self.stop()
+            return
         
         # retrive actions associated with visual data        
         actions_lists.extend(
@@ -633,9 +736,12 @@ class MapMind(Node):
                                       key = lambda x: x['score'],
                                       reverse=True)
         
-        self.action_list = self.action_crossovers(sorted_actions_lists)
+        if sorted_actions_lists[0]['score'] > 0.0:
+            self.action_list = sorted_actions_lists[0]["actions"]
+        else:
+            self.action_list = self.action_crossovers(sorted_actions_lists)
         
-        self.action_iter = iter(self.action_list)
+        self.action_iter = 0
         
         self.get_logger().info(f"Action list lenght: {len(self.action_list)}")
         
@@ -647,6 +753,8 @@ class MapMind(Node):
         if self.wait_for_img or self.wait_for_depth:
             return
         
+        self.timer.cancel()
+        
         self.get_logger().info('Mind tick')
         
         start = timer()
@@ -656,6 +764,8 @@ class MapMind(Node):
         end = timer()
         
         self.get_logger().info(f'Tick inference time {end - start} s')
+        
+        self.timer.reset()
         
 
 def main(args=None):
