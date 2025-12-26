@@ -95,7 +95,7 @@ def generate_launch_description():
             'use_sim_time': True,
         }],
         remappings=[
-            ('cmd_vel','motors/cmd_vel'),
+            ('cmd_vel','motors/cmd_vel_unstamped'),
             ('camera','camera/image_raw'),
             ('depth','camera/depth/image_raw'),
             ('points','camera/points')

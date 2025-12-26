@@ -43,6 +43,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance,OrderBy,PayloadSchemaType
 from qdrant_client.http import models
 
+import random
 
 ID_TO_EMOTION_NAME = [
     "angry",
@@ -56,18 +57,36 @@ IMG_EMBEDDING_SHAPE = 32*32*4
 IMG_ACTION_SET_NAME = "actions_sets"
 
 def generate_embedding(img,depth):
+    '''
+    generate_embedding 
     
-    img_res = cv2.resize(img,(32,32))
+    In that case it takes image and 
+    depth image, merges them and split them
+    into equal parts.
     
-    depth_res = cv2.resize(depth,(32,32)) 
+    :param img: Associated RGB image
+    :param depth: Associated depth image
+    '''
     
-    depth_flatten = depth_res.astype(np.float32).flatten()
-                
-    img_flatten = img_res.astype(np.float32).flatten() / 255.0
+    img = cv2.resize(img,(224,224)).astype(np.float32) / 255.0
+    depth = cv2.resize(depth,(224,224))
     
-    embedding = np.concatenate((img_flatten,depth_flatten))
+    img_merged = cv2.merge([img,depth])
     
-    return embedding
+    x = 0
+    y = 0
+    
+    steps = int(224/32)
+    
+    embeddings = []
+    
+    for y in range(steps):
+        for x in range(steps):
+            embeddings.append(
+                img_merged[x*32:x*32 + 32,y*32:y*32 + 32].flatten()
+            )
+        
+    return embeddings
 
 
 FACE_TOLERANCE = 0.94
@@ -233,9 +252,7 @@ class MapMind(Node):
             10)
         
         self.mic_subscripe = self.create_subscription(Microphone,'mic',self.mic_callback,10)
-        
-        self.img_embedding = np.zeros(IMG_EMBEDDING_SHAPE,dtype=np.uint8)
-        
+                
         self.bridge = CvBridge()
         
         self.db = QdrantClient(host='0.0.0.0',port=6333)
@@ -246,7 +263,7 @@ class MapMind(Node):
                 
         self.emotion_state = 0.0
         
-        self.last_img_embedding = np.zeros(IMG_EMBEDDING_SHAPE,dtype=np.uint8)
+        self.last_img_embeddings = np.zeros(IMG_EMBEDDING_SHAPE,dtype=np.float32)
         
         self.action_list = []
         self.action_executing = False
@@ -269,6 +286,9 @@ class MapMind(Node):
         
         self.mic_buffor = np.zeros(2*16000,dtype=np.float32)
         
+        self.wait_for_img = True
+        self.wait_for_depth = True
+        
         # angry
         # fear
         # happiness
@@ -284,7 +304,7 @@ class MapMind(Node):
             )
         
     def initialize_db(self):
-                
+                        
         if not self.db.collection_exists(IMG_ACTION_SET_NAME):
             self.get_logger().warning("Image action set database not exist, creating new one!")
             self.db.create_collection(
@@ -369,11 +389,15 @@ class MapMind(Node):
         
         self.depth = self.bridge.imgmsg_to_cv2(msg)
         
+        self.wait_for_depth = False
+        
     def image_callback(self,msg:Image):
         
         self.get_logger().info('I got image with format: %s' % msg.encoding)
         
         self.image = self.bridge.imgmsg_to_cv2(msg)
+        
+        self.wait_for_img = False
                 
     def points_callback(self, msg: PointCloud2):
         # Read points from PointCloud2
@@ -393,11 +417,11 @@ class MapMind(Node):
         if self.obstacle_detected:    
             self.get_logger().info(f'Obstacle detected!')
             
-    def emotion_state_calculate(self,emotions):
+    def emotion_state_calculate(self,emotions:list[float]):
                 
         return  emotions[2]*320.0 + emotions[1]*-120.0 + emotions[3]*-40.0 + emotions[0]*-60.0 + emotions[4]*-20.0
         
-    def send_ears_state(self,emotions):
+    def send_ears_state(self,emotions:list[float]):
         
         max_id = 4
         
@@ -415,7 +439,125 @@ class MapMind(Node):
         array.data=[np.pi - angle, angle]
         
         self.ears_publisher.publish(array)
+        
     
+    def check_actions_payload(self,payload:dict):
+        
+        return "actions" in payload.keys() \
+                and "score" in payload.keys() \
+                and type(payload["actions"]) is list \
+                and type(payload["score"]) is float
+                
+    def attach_actions_to_image_embeddings(self,actions:list[tuple],score:float):
+        
+        new_id = self.db.count(IMG_ACTION_SET_NAME).count + 1
+        
+        for img_embedding in self.last_img_embeddings:
+            self.db.upsert(
+                collection_name=IMG_ACTION_SET_NAME,
+                points=[
+                        models.PointStruct(
+                            id = new_id,
+                            vector=img_embedding,
+                            payload = {
+                                    "score": score,
+                                    "actions": actions
+                                }
+                            )
+                    ]
+            )
+    
+    def update_actions_for_embeddings(self,actions:list[tuple],score:float):
+        
+        self.attach_actions_to_image_embeddings(actions,score)
+    
+    def image_action_retrival(self):
+        
+        actions_lists = []
+        
+        if self.image is not None and self.depth is not None:
+                    
+            self.last_img_embeddings = generate_embedding(self.image,self.depth)
+            
+            # get actions lists associated with it
+            
+            # payloads for analazying
+            
+            for img_embedding in self.last_img_embeddings:
+            
+                hits = self.db.query_points(
+                    collection_name=IMG_ACTION_SET_NAME,
+                    query=img_embedding,
+                    limit=3
+                )
+            
+                points = hits.points
+                
+                for hit in points:
+                    if hit.score < 0.25:
+                        if self.check_actions_payload(hit.payload):
+                            actions_lists.append(hit.payload)
+            
+                # self.get_logger().info(f'Points: {points}')
+        else:
+            self.get_logger().warning('No visual data!')
+            
+        return actions_lists
+    
+    def action_crossovers(self,actions_lists):
+        
+        actions = []
+        
+        if len(actions_lists) < 2:
+            
+            action_count = int(np.random.uniform(1,64))
+            
+            for i in range(action_count):
+                
+                v = np.random.random()
+                w = np.random.random()
+                
+                actions.append((v,w))
+                
+            return actions
+        
+        # for now we will only do this with two actions
+        # when we incorporate map we will use more predictive 
+        # retrival approach
+        
+        actions.extend(actions_lists[0]["actions"])
+        actions.extend(actions_lists[1]["actions"])
+        
+        # drop out
+        
+        to_remove = []
+        
+        if len(actions) > 64:
+            action_mask = np.random.random(len(actions))
+            for i in range(len(actions)):
+                if action_mask[i] < 0.1:
+                    to_remove.append(i)
+                    
+        # for to_rem in to_remove:
+        #     actions.pop(to_rem)
+                    
+        action_mask = np.random.random(len(actions))
+        
+        # perform mutations
+        
+        for i in range(len(actions)):
+            if action_mask[i] < 0.1:
+                v = actions[i][0] + np.random.random()*0.1
+                w = actions[i][1] + np.random.random()*0.1
+                
+                actions[i] = (v,w)
+                    
+        random.shuffle(actions)
+        
+        return actions
+        
+        
+        
     
     def tick_func(self):
         # emotion validation pipeline
@@ -454,44 +596,57 @@ class MapMind(Node):
                 # perform crossover and mutations
                 self.action_executing = False
                 self.stop()
+                
+                self.update_actions_for_embeddings(self.action_list,score)
                 return
             
             if action is None or score > 0.0:
                 # perform action set trim
                 self.action_executing = False
                 self.stop()
+                
+                self.update_actions_for_embeddings(self.action_list,score)
                 return
             
             self.send_command(action[0],action[1])
+            self.get_logger().info("Performing actions")
             
             return
+        
+        actions_lists = []
         
         # if score >= 0.0:
         #     self.stop()
         #     return
         
-        # generate embedding for image
+        # retrive actions associated with visual data        
+        actions_lists.extend(
+            self.image_action_retrival()
+        )
         
-        if self.image is not None and self.depth is not None:
-                    
-            self.last_img_embedding = generate_embedding(self.image,self.depth)
-            
-            # get actions lists associated with it
-            
-            hits = self.db.query_points(
-                collection_name=IMG_ACTION_SET_NAME,
-                query=self.last_img_embedding,
-                limit=10
-            )
-            
-            points = hits.points
-            
-            self.get_logger().info(f'Points: {points}')
-        else:
-            self.get_logger().warning('No visual data!')
+        # retrive actions associated with audio data ( mel spectogram )
+        
+        
+        # perform crossover and mutations on gathered actions
+        
+        sorted_actions_lists = sorted(actions_lists,
+                                      key = lambda x: x['score'],
+                                      reverse=True)
+        
+        self.action_list = self.action_crossovers(sorted_actions_lists)
+        
+        self.action_iter = iter(self.action_list)
+        
+        self.get_logger().info(f"Action list lenght: {len(self.action_list)}")
+        
+        self.action_executing = True
         
         
     def tick_callback(self):
+        
+        if self.wait_for_img or self.wait_for_depth:
+            return
+        
         self.get_logger().info('Mind tick')
         
         start = timer()
