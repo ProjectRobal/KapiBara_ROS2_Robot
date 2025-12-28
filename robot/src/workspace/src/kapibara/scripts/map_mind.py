@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import rclpy
 from rclpy.node import Node
 
@@ -7,6 +8,8 @@ from geometry_msgs.msg import Twist
 
 from sensor_msgs.msg import Range,Imu,PointCloud2
 from geometry_msgs.msg import Quaternion
+
+from ament_index_python.packages import get_package_share_directory,get_package_prefix
 
 from std_msgs.msg import Float64MultiArray
 
@@ -43,6 +46,8 @@ import numpy as np
 from timeit import default_timer as timer
 import time
 
+import librosa
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance,OrderBy,PayloadSchemaType
 from qdrant_client.http import models
@@ -58,13 +63,32 @@ ID_TO_EMOTION_NAME = [
     ]
 
 IMG_EMBEDDING_SHAPE = 32*32*4
-ML_SPECTOGRAM_EMBEDDING_SHAPE = 0
+ML_SPECTOGRAM_EMBEDDING_SHAPE = 32*32
 
 # month, day, hour, minute, second
 TIME_EMBEDDING_SHAPE = 5
 
 IMG_ACTION_SET_NAME = "actions_sets"
 SPECTOGRAM_ACTION_NAME = "ml_actions_sets"
+
+
+def split_embedding(input):
+    
+    x = 0
+    y = 0
+    
+    steps = int(224/32)
+    
+    embeddings = []
+    
+    for y in range(steps):
+        for x in range(steps):
+            embeddings.append(
+                input[x*32:x*32 + 32,y*32:y*32 + 32].flatten()
+            )
+        
+    return embeddings
+    
 
 def generate_embedding(img,depth):
     '''
@@ -82,21 +106,12 @@ def generate_embedding(img,depth):
     depth = cv2.resize(depth,(224,224))
     
     img_merged = cv2.merge([img,depth])
+
+    return split_embedding(img_merged)
+
+def generate_embedding_spec(spec):
     
-    x = 0
-    y = 0
-    
-    steps = int(224/32)
-    
-    embeddings = []
-    
-    for y in range(steps):
-        for x in range(steps):
-            embeddings.append(
-                img_merged[x*32:x*32 + 32,y*32:y*32 + 32].flatten()
-            )
-        
-    return embeddings
+    return split_embedding(spec)
 
 
 FACE_TOLERANCE = 0.94
@@ -221,19 +236,21 @@ class MapMind(Node):
         self.declare_parameter('max_angular_speed', 2.0)
         self.declare_parameter('tick_time', 0.05)
         
-        self.declare_parameter('yolo_model_path','models/yolov11n-face.pt')
-        self.declare_parameter('deepid_model_path','models/deepid.tflite')
+        package_path = get_package_share_directory('kapibara')
+        
+        self.declare_parameter('yolo_model_path','yolov11n-face_float32.tflite')
+        self.declare_parameter('deepid_model_path','deepid.tflite')
         
         self.max_linear_speed = self.get_parameter('max_linear_speed').get_parameter_value().double_value
         self.max_angular_speed = self.get_parameter('max_angular_speed').get_parameter_value().double_value
         
         yolo_model_path = self.get_parameter('yolo_model_path').get_parameter_value().string_value
         
-        self.face_yolo = YOLO(yolo_model_path)
+        self.face_yolo = YOLO(os.path.join(package_path,'model',yolo_model_path))
         
         deepid_model_path = self.get_parameter('deepid_model_path').get_parameter_value().string_value
         
-        self.deep_id = DeepIDTFLite(filepath=deepid_model_path)
+        self.deep_id = DeepIDTFLite(filepath=os.path.join(package_path,'model',deepid_model_path))
         
         self.twist_pub = self.create_publisher(Twist, 'cmd_vel', 10)
         
@@ -284,7 +301,9 @@ class MapMind(Node):
                 
         self.emotion_state = 0.0
         
-        self.last_img_embeddings = np.zeros(IMG_EMBEDDING_SHAPE,dtype=np.float32)
+        self.last_img_embeddings = []
+        
+        self.last_spectogram_embeddings = []
         
         self.action_list = []
         self.action_executing = False
@@ -292,6 +311,7 @@ class MapMind(Node):
         
         self.image = None
         self.depth = None
+        self.spectogram = None
         
         self.emotion = Emotions()
         
@@ -309,6 +329,8 @@ class MapMind(Node):
         
         self.wait_for_img = True
         self.wait_for_depth = True
+        
+        self.last_score = 0
         
         # angry
         # fear
@@ -338,10 +360,15 @@ class MapMind(Node):
                 collection_name=IMG_ACTION_SET_NAME,
                 vectors_config=VectorParams(size=IMG_EMBEDDING_SHAPE, distance=Distance.EUCLID),
             )
+            
+        if not self.db.collection_exists(SPECTOGRAM_ACTION_NAME):
+            self.get_logger().warning("MEL spectogram action set database not exist, creating new one!")
+            self.db.create_collection(
+                collection_name=SPECTOGRAM_ACTION_NAME,
+                vectors_config=VectorParams(size=ML_SPECTOGRAM_EMBEDDING_SHAPE, distance=Distance.EUCLID),
+            )
         
         
-        
-    
     def send_command(self,linear:float,angular:float):
         
         twist = Twist()
@@ -380,24 +407,17 @@ class MapMind(Node):
         
         # if speech_detect:
         #     self.uncertain_speech = 1.0
-        # We are going to replace it with something simpler
-        # output,spectogram = self.hearing.input(self.mic_buffor)
         
-        nperseg = 255
-        noverlap = nperseg - 128 # 255 - 128 = 127
-
-        # Calculate the spectrogram
-        # f: array of sample frequencies
-        # t_spec: array of segment times
-        # Sxx: Spectrogram of x. By default, the last axis of Sxx corresponds to the segment times.
-        # f, t_spec, _spectogram = spectrogram(self.mic_buffor, fs=16000, nperseg=nperseg, noverlap=noverlap)
-                
-        # _spectogram = cv2.normalize(_spectogram,None,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        spectogram = librosa.feature.melspectrogram(y=self.mic_buffor, sr=16000,n_mels=224,hop_length=143)
+        
+        self.get_logger().info(f"Spectogram size: {spectogram.shape}")
         
         # publish last spectogram
-        # self.spectogram_publisher.publish(self.bridge.cv2_to_imgmsg(_spectogram))
+        self.spectogram_publisher.publish(self.bridge.cv2_to_imgmsg(spectogram))
                 
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
+        
+        self.spectogram = spectogram
         
         # self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
         
@@ -440,10 +460,15 @@ class MapMind(Node):
         
         min_points = np.mean(sorted_points[0:10])
         
-        self.obstacle_detected = min_points < 0.0
+        self.obstacle_detected = float(np.exp(-min_points*25))
         
+        self.obstacle_detected = min(self.obstacle_detected,1.0)
+        
+        if self.obstacle_detected < 0.01:
+            self.obstacle_detected = 0.0
+                
         if self.obstacle_detected:    
-            self.get_logger().info(f'Obstacle detected!')
+            self.get_logger().info(f'Obstacle detected! {self.obstacle_detected}, min point {min_points}')
             
     def sense_callabck(self,sense:PiezoSense):
         
@@ -509,28 +534,69 @@ class MapMind(Node):
         
         new_id = self.db.count(IMG_ACTION_SET_NAME).count + 1
         
+        points = []
+        
+        payload = {
+                        "score": score,
+                        "actions": actions
+                    }
+        
         for img_embedding in self.last_img_embeddings:
             
-            try:
-                self.db.upsert(
-                    collection_name=IMG_ACTION_SET_NAME,
-                    points=[
-                            models.PointStruct(
-                                id = new_id,
-                                vector=img_embedding,
-                                payload = {
-                                        "score": score,
-                                        "actions": actions
-                                    }
+            points.append(
+                models.PointStruct(
+                        id = int(new_id),
+                        vector=img_embedding.tolist(),
+                        payload = payload
+                        )
+            )
+            new_id+=1
+            
+        try:
+            self.db.upsert(
+                collection_name=IMG_ACTION_SET_NAME,
+                points=points
+            )
+        except Exception as e:
+            self.get_logger().info(f"Exception during image update: {e}")
+                
+    def attach_actions_to_spec_embeddings(self,actions:list[tuple],score:float):
+        
+        new_id = self.db.count(SPECTOGRAM_ACTION_NAME).count + 1
+        
+        points = []
+        
+        payload = {
+                        "score": score,
+                        "actions": actions
+                    }
+        
+        for spec_embeddings in self.last_spectogram_embeddings:
+            
+            points.append(
+                models.PointStruct(
+                                id = int(new_id),
+                                vector=spec_embeddings.tolist(),
+                                payload = payload
                                 )
-                        ]
-                )
-            except Exception as e:
-                self.get_logger().info(f"Exception during image update: {e}")
+            )
+            
+            new_id += 1
+            
+        try:
+            self.db.upsert(
+                collection_name=SPECTOGRAM_ACTION_NAME,
+                points=points
+            )
+        except Exception as e:
+            self.get_logger().info(f"Exception during spec update: {e}")
     
     def update_actions_for_embeddings(self,actions:list[tuple],score:float):
         
         self.attach_actions_to_image_embeddings(actions,score)
+        
+        self.attach_actions_to_spec_embeddings(actions,score)
+    
     
     def image_action_retrival(self):
         
@@ -566,6 +632,43 @@ class MapMind(Node):
                 # self.get_logger().info(f'Points: {points}')
         else:
             self.get_logger().warning('No visual data!')
+            
+        return actions_lists
+    
+    def spectogram_action_retrival(self):
+        
+        actions_lists = []
+        
+        if self.spectogram is not None:
+                    
+            self.last_spectogram_embeddings = generate_embedding_spec(self.spectogram)
+            
+            # get actions lists associated with it
+            
+            # payloads for analazying
+            
+            for spec_embedding in self.last_spectogram_embeddings:
+                
+                try:
+                            
+                    hits = self.db.query_points(
+                        collection_name=SPECTOGRAM_ACTION_NAME,
+                        query=spec_embedding,
+                        limit=3
+                    )
+                
+                    points = hits.points
+                    
+                    for hit in points:
+                        if hit.score < 0.25:
+                            if self.check_actions_payload(hit.payload):
+                                actions_lists.append(hit.payload)
+                except Exception as e:
+                    self.get_logger().info(f"Excpetion in spectogram retrival: {e}")
+            
+                # self.get_logger().info(f'Points: {points}')
+        else:
+            self.get_logger().warning('No spectogram data!')
             
         return actions_lists
     
@@ -623,7 +726,7 @@ class MapMind(Node):
         
         # face detection
         
-        faces = self.face_yolo(self.image)
+        # faces = self.face_yolo(self.image)
         
         # mean_embed = np.zeros(160,dtype=np.float32)
         
@@ -635,24 +738,24 @@ class MapMind(Node):
         self.current_face_embeddings.clear()
         
         # examine resulted faces
-        for result in faces:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
+        # for result in faces:
+        #     boxes = result.boxes
+        #     for box in boxes:
+        #         x1, y1, x2, y2 = map(int, box.xyxy[0])
                 
-                width = x2 - x1
-                height = y2 - y1
+        #         width = x2 - x1
+        #         height = y2 - y1
                 
-                distance = width*height
+        #         distance = width*height
                 
-                conf = box.conf[0]
-                cls = int(box.cls[0])
+        #         conf = box.conf[0]
+        #         cls = int(box.cls[0])
                 
-                img = self.image[y1:y2,x1:x2]
+        #         img = self.image[y1:y2,x1:x2]
                 
-                embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
+        #         embed = np.array(self.deep_id.process(img)[0],dtype=np.float32)
 
-                self.current_face_embeddings.append([embed,distance])
+        #         self.current_face_embeddings.append([embed,distance])
         
         # evaluate emotion states
         
@@ -681,6 +784,10 @@ class MapMind(Node):
         
         score = self.emotion_state_calculate(emotions_arr)
         
+        dscore = score - self.last_score
+
+        self.last_score = score
+        
         # send ears position
         self.send_ears_state(emotions_arr)
         
@@ -690,7 +797,7 @@ class MapMind(Node):
             
             self.action_iter += 1
             
-            if score < -0.25:
+            if dscore < -0.25:
                 # perform mutations
                 self.action_executing = False
                 self.stop()
@@ -729,6 +836,9 @@ class MapMind(Node):
         
         # retrive actions associated with audio data ( mel spectogram )
         
+        actions_lists.extend(
+            self.spectogram_action_retrival()
+        )        
         
         # perform crossover and mutations on gathered actions
         
@@ -736,7 +846,7 @@ class MapMind(Node):
                                       key = lambda x: x['score'],
                                       reverse=True)
         
-        if sorted_actions_lists[0]['score'] > 0.0:
+        if len(sorted_actions_lists) > 0 and sorted_actions_lists[0]['score'] > 0.0:
             self.action_list = sorted_actions_lists[0]["actions"]
         else:
             self.action_list = self.action_crossovers(sorted_actions_lists)
@@ -750,7 +860,7 @@ class MapMind(Node):
         
     def tick_callback(self):
         
-        if self.wait_for_img or self.wait_for_depth:
+        if self.wait_for_img or self.wait_for_depth or self.spectogram is None:
             return
         
         self.timer.cancel()

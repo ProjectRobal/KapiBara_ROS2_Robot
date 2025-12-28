@@ -166,7 +166,7 @@ def generate_launch_description():
         ears_controller_spawner,
         mic,
         map_mind,
-        delayed_rtabmap
+        # delayed_rtabmap
     ])
 
 
