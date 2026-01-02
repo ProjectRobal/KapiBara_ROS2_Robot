@@ -85,9 +85,10 @@ def generate_launch_description():
           'odom_frame_id': 'KapiBara_odom',
           'publish_tf':True,
           'approx_sync':True,
-          'database_path':'/app/src/map/rtabmap.db',
+          'database_path':'/app/src/map/rtabmap_mapper.db',
           'Odom/ResetCountdown':'1',
-          'Rtabmap/StartNewMapOnLoopClosure':"true"
+          'Rtabmap/StartNewMapOnLoopClosure':"true",
+          'Grid/FromDepth':'true',
           
           }]
     

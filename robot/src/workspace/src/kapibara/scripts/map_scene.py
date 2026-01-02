@@ -1,14 +1,28 @@
 #!/usr/bin/env python3
 
+from dataclasses import dataclass
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import CompressedImage,Image
+
 from sensor_msgs_py import point_cloud2
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry,OccupancyGrid
+
+import torch
+
+import cv2
+from cv_bridge import CvBridge
 
 import numpy as np
 
+@dataclass
+class Checkpoint:
+    image:np.ndarray
+    x:float
+    y:float
+    yaw:float
 
 class SceneMapper(Node):
 
@@ -29,10 +43,24 @@ class SceneMapper(Node):
             10
         )
         
-        self.odom_callback = self.create_subscription(
+        self.odom_sub = self.create_subscription(
             Odometry,
             '/KapiBara/odom',
             self.odom_callback,
+            10
+        )
+        
+        self.map_sub = self.create_subscription(
+            OccupancyGrid,
+            '/KapiBara/map',
+            self.map_callaback,
+            10
+        )
+        
+        self.image_sub = self.create_subscription(
+            Image,
+            '/KapiBara/camera/image_raw',
+            self.image_callback,
             10
         )
 
@@ -40,17 +68,53 @@ class SceneMapper(Node):
         timer_period = 0.01
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.obstacle_detected = False
+        
+        self.tick_counter = 0
 
-        self.get_logger().info('CmdVel publisher started at 100 Hz')
+        self.get_logger().info(f'CmdVel publisher started at {int(1 / timer_period)} Hz')
         
         self.x = 0.0
         self.y = 0.0
         
         self.yaw = 0.0
         
+        # map coordinates
+        self.map_x = 0
+        self.map_y = 0
+        self.resolution = 0.05
+        
+        self.map_step = 0
+        
         self.yaw_when_collision = 0.0
         
         self.rotate_againt_obstacle = False
+        
+        self.map = None
+        self.image = None
+        
+        self.checkpoints:list[Checkpoint] = []
+        
+        self.bridge = CvBridge()
+        
+    def add_checkpoint(self):
+        checkpoint = Checkpoint(
+            image=self.image.copy(),
+            x=self.x,
+            y=self.y,
+            yaw=self.yaw
+        )
+        self.checkpoints.append(checkpoint)
+        self.get_logger().info(f'Checkpoint added at position: {self.x} {self.y} {self.yaw}')
+        
+    def memorize(self):
+        '''
+        Docstring for memorize
+        
+        A function that takes collected checkpoints
+        and use them to train neural network to memorize
+        map.
+        '''
+        pass
     
     def quaternion_to_yaw(self,q):
         """
@@ -63,6 +127,21 @@ class SceneMapper(Node):
 
         return yaw
     
+    def position_to_map_coords(self, x:float, y:float):
+        '''
+        Convert world coordinates to map coordinates
+        '''
+        if self.map is None:
+            return None, None
+        
+        map_x = int((x - self.map_x) / self.resolution)
+        map_y = int((y - self.map_y) / self.resolution)
+        
+        if map_x < 0 or map_x >= self.map.shape[1] or map_y < 0 or map_y >= self.map.shape[0]:
+            return None, None
+        
+        return map_x, map_y
+    
     def odom_callback(self,msg: Odometry):
         
         self.x = msg.pose.pose.position.x
@@ -71,6 +150,22 @@ class SceneMapper(Node):
         self.yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
         
         self.get_logger().info(f'Robot position: {self.x} {self.y} {self.yaw}')
+        
+    def map_callaback(self, msg: OccupancyGrid):
+        self.get_logger().info('Got map!')
+        self.map = np.array(msg.data,dtype=np.int8).reshape((msg.info.height, msg.info.width))
+        self.map = self.map.astype(np.float32) / 100.0
+        
+        self.map_x = msg.info.origin.position.x
+        self.map_y = msg.info.origin.position.y
+        self.resolution = msg.info.resolution
+        
+    def image_callback(self,msg:Image):
+        
+        self.get_logger().info('Got image with format: %s' % msg.encoding)
+        
+        self.image = self.bridge.imgmsg_to_cv2(msg)
+        
         
     def points_callback(self, msg: PointCloud2):
         # Read points from PointCloud2
@@ -88,27 +183,43 @@ class SceneMapper(Node):
         self.obstacle_detected = min_points < 0.0
         
         if self.obstacle_detected:    
-            if not self.rotate_againt_obstacle:
-                self.yaw_when_collision = self.yaw
-                self.rotate_againt_obstacle = True
             self.get_logger().info(f'Obstacle detected!')
+            
+    def stop(self):
+        msg = Twist()
+        msg.linear.x = 0.0
+        msg.angular.z = 0.0
+        self.publisher_.publish(msg)
+    
+    def tick(self):
+        
+        self.tick_counter += 1
+        
+        if self.tick_counter % 25 == 0:
+            self.tick_counter = 0
+            
+            if self.image is not None:
+                self.get_logger().info('Adding checkpoint!')
+                self.add_checkpoint()
+                
+                self.stop()
+                return
+
+        msg = Twist()
+        
+        msg.linear.x = 0.0
+        msg.angular.z = 1.5
+    
+
+        self.publisher_.publish(msg)
         
 
     def timer_callback(self):
-        msg = Twist()
+        self.timer.cancel()
         
-        if abs(self.yaw - self.yaw_when_collision) > np.pi/4:
-                self.rotate_againt_obstacle = False
+        self.tick()
         
-        if not self.rotate_againt_obstacle:
-            msg.linear.x = 0.25
-            msg.angular.z = 0.0
-        else:
-                
-            msg.linear.x = 0.0
-            msg.angular.z = 3.0
-
-        self.publisher_.publish(msg)
+        self.timer.reset()
 
 
 def main(args=None):
