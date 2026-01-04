@@ -108,5 +108,6 @@
         "variant": "cpp"
     },
     "cmake.sourceDirectory": "/app/src/workspace/sim_build/modus_board_interfaces/modus_board_interfaces__py",
-    "ros.distro": "jazzy"
+    "ros.distro": "jazzy",
+    "ROS2.distro": "humble"
 }

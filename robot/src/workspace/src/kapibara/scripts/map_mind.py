@@ -72,6 +72,12 @@ TIME_EMBEDDING_SHAPE = 5
 IMG_ACTION_SET_NAME = "actions_sets"
 SPECTOGRAM_ACTION_NAME = "ml_actions_sets"
 
+GENERAL_POINT_DB_NAME = "general_point_database"
+GENRAL_POINT_EMBEDDING_SHAPE = 64
+
+GENERAL_ACTION_DB_NAME = "general_action_database"
+GENRAL_POINT_EMBEDDING_SHAPE = 64
+
 POINT_MAP_DB = "points_database"
 POINT_IMG_DB = "points_imgages"
 POINT_SPEC_DB = "points_spect"
@@ -83,14 +89,14 @@ def split_embedding(input):
     x = 0
     y = 0
     
-    steps = int(224/32)
+    steps = int(56/8)
     
     embeddings = []
     
     for y in range(steps):
         for x in range(steps):
             embeddings.append(
-                input[x*32:x*32 + 32,y*32:y*32 + 32].flatten()
+                input[x*8:x*8 + 8,y*8:y*8 + 8].flatten()
             )
         
     return embeddings
@@ -108,10 +114,14 @@ def generate_embedding(img,depth):
     :param depth: Associated depth image
     '''
     
-    img = cv2.resize(img,(224,224)).astype(np.float32) / 255.0
-    depth = cv2.resize(depth,(224,224))
+    img = cv2.resize(img,(56,56)).astype(np.float32) / 255.0
+    b,g,r = cv2.split(img)
     
-    img_merged = cv2.merge([img,depth])
+    img = 0.4*r + 0.5*g + 0.1*b
+    
+    depth = cv2.resize(depth,(56,56))
+    
+    img_merged = img+depth
 
     return split_embedding(img_merged)
 
@@ -365,18 +375,17 @@ class MapMind(Node):
         
     def initialize_db(self):
                                 
-        if not self.db.collection_exists(IMG_ACTION_SET_NAME):
-            self.get_logger().warning("Image action set database not exist, creating new one!")
+        if not self.db.collection_exists(GENERAL_POINT_DB_NAME):
+            self.get_logger().warning("General point database not exist, creating new one!")
             self.db.create_collection(
-                collection_name=IMG_ACTION_SET_NAME,
-                vectors_config=VectorParams(size=IMG_EMBEDDING_SHAPE, distance=Distance.EUCLID),
-            )
-            
-        if not self.db.collection_exists(SPECTOGRAM_ACTION_NAME):
-            self.get_logger().warning("MEL spectogram action set database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=SPECTOGRAM_ACTION_NAME,
-                vectors_config=VectorParams(size=ML_SPECTOGRAM_EMBEDDING_SHAPE, distance=Distance.EUCLID),
+                collection_name=GENERAL_POINT_DB_NAME,
+                vectors_config=VectorParams(size=GENRAL_POINT_EMBEDDING_SHAPE, distance=Distance.EUCLID),
+                # quantization_config=models.ProductQuantization(
+                #     product=models.ProductQuantizationConfig(
+                #         compression=models.CompressionRatio.X16,
+                #         always_ram=True,
+                #     ),
+                # ),
             )
             
         # intialize point map
@@ -385,6 +394,12 @@ class MapMind(Node):
             self.db.create_collection(
                 collection_name=POINT_MAP_DB,
                 vectors_config=VectorParams(size=2, distance=Distance.EUCLID),
+                # quantization_config=models.ProductQuantization(
+                #     product=models.ProductQuantizationConfig(
+                #         compression=models.CompressionRatio.X16,
+                #         always_ram=True,
+                #     ),
+                # ),
             )
             
             self.db.create_payload_index(
@@ -393,28 +408,6 @@ class MapMind(Node):
                 field_schema=PayloadSchemaType.FLOAT
             )
         
-        # initialize associated map points group
-        
-        if not self.db.collection_exists(POINT_IMG_DB):
-            self.get_logger().warning("Image points set database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=POINT_IMG_DB,
-                vectors_config=VectorParams(size=IMG_EMBEDDING_SHAPE, distance=Distance.EUCLID),
-            )
-            
-        if not self.db.collection_exists(POINT_SPEC_DB):
-            self.get_logger().warning("MEL spectogram points set database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=POINT_SPEC_DB,
-                vectors_config=VectorParams(size=ML_SPECTOGRAM_EMBEDDING_SHAPE, distance=Distance.EUCLID),
-            )
-            
-        if not self.db.collection_exists(POINT_TIME_DB):
-            self.get_logger().warning("Time points set database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=POINT_TIME_DB,
-                vectors_config=VectorParams(size=TIME_EMBEDDING_SHAPE, distance=Distance.EUCLID),
-            )
             
     def get_points_in_radius(self,x:float,y:float,radius:float = 0.5)->list[tuple]:
         hits = self.db.query_points(
@@ -563,7 +556,7 @@ class MapMind(Node):
                 
         self.get_logger().debug("Hearing time: "+str(timer() - start)+" s")
         
-        self.spectogram = spectogram
+        self.spectogram = cv2.resize(spectogram,(56,56))
         
         # self.get_logger().debug("Hearing output: "+str(self.hearing.answers[output]))
         
@@ -642,7 +635,7 @@ class MapMind(Node):
                 
                 nearest_face = self.current_face_embeddings[0]                
                 
-                out = self.face.update_face(nearest_face,score)
+                self.face.update_face(nearest_face,score)
                 
                             
     def emotion_state_calculate(self,emotions:list[float]):
@@ -677,290 +670,70 @@ class MapMind(Node):
                 and type(payload["score"]) is float
                 
     
-    def add_points_to_image_embeddings(self,points:list[tuple]):
+    def add_point_to_embeddings(self,point:tuple,embeddings):
         """
-        Docstring for add_points_to_image_embeddings
+        Docstring for add_point_to_embeddings
         
         :param self: Description
-        :param points: list with points (x,y,v) - x,y position in 2D space
+        :param point: list with points (x,y,v) - x,y position in 2D space
                 v - associated value
         :type points: list[tuple]
         """
         
         points_to_push = []
 
-        for img_embedding in self.last_img_embeddings:
+        for embedding in embeddings:
                         
-            # check if embeddings aren't aleardy presents
-            hits = self.db.query_points(
-                        collection_name=POINT_IMG_DB,
-                        query=img_embedding,
-                        limit=1
-                    )
+            new_id = self.db.count(GENERAL_POINT_DB_NAME).count + 1
             
-            if len(hits.points) == 1 and \
-                hits.points[0].score <= 0.1:
-
-                new_id = hits.points[0].id
-
-                payload = np.frombuffer(base64.b64decode(hits.points[0].payload["points"]),
-                                        dtype=np.float32).reshape(-1,3)
-            else:
-                new_id = self.db.count(POINT_IMG_DB).count + 1
-                payload = np.empty((0,3),dtype=np.float32)
-                
-            n_points = np.array(points,dtype=np.float32).reshape(-1,3)
+            n_points = np.array(point,dtype=np.float32)
             
-            keep = []
+            payload = n_points
             
-            if payload.shape[0] > 0:
-                
-                for p in n_points:
-                    dists = np.linalg.norm(
-                        payload[:,:2] - p[:2],
-                        axis=1
-                    )
-                    if np.any(dists > 0.1):
-                        keep.append(p)
-                        
-                n_points = np.array(keep,dtype=np.float32).reshape(-1,3)
-            
-            payload = np.concatenate((payload,n_points),axis=0)
-            
-            if n_points.shape[0] > 64:
-                to_remove = n_points.shape[0] - 64
-                
-                payload = payload[to_remove:,:]
-            
-            self.get_logger().debug(f"Updating image embedding with {len(points)} new points, total points: {len(payload)}")
+            self.get_logger().debug("Updating image embedding.")
 
             payload = base64.b64encode(payload.tobytes())
             
             points_to_push.append(
                 models.PointStruct(
                         id = int(new_id),
-                        vector=img_embedding.tolist(),
+                        vector=embedding,
                         payload = {"points": payload}  
                         )
                 )
             
         self.db.upsert(
-            collection_name=POINT_IMG_DB,
+            collection_name=GENERAL_POINT_DB_NAME,
             points=points_to_push
         )
         
-    def get_points_from_image_embeddings(self)->list[tuple]:
-                
-        for img_embedding in self.last_img_embeddings:
+    def get_points_from_embeddings(self,embeddings)->list[tuple]:
+        
+        points = []
+        
+        requests = []
+        
+        for embedding in embeddings:
             
             # check if embeddings aren't aleardy presents
             hits = self.db.query_points(
-                        collection_name=POINT_IMG_DB,
-                        query=img_embedding,
-                        limit=1
+                        collection_name=GENERAL_POINT_DB_NAME,
+                        query=embedding,
+                        search_params=models.SearchParams(hnsw_ef=128, exact=False),
+                        limit=4
                     )
             
-            if len(hits.points) != 1 or \
-                hits.points[0].score > 0.1:
-                    return []
+            for hit in hits.points:
+                if hit.score > 0.1:
+                    continue
+                payload = base64.b64decode(hit.payload["points"])
                 
-            payload = base64.b64decode(hits.points[0].payload["points"])
-            
-            points = np.frombuffer(payload, dtype=np.float32).reshape(-1,3)
-                    
-            return points
+                point = np.frombuffer(payload, dtype=np.float32)
                 
-                
-    def attach_actions_to_image_embeddings(self,actions:list[tuple],score:float):
+                points.append(point)
         
-        new_id = self.db.count(IMG_ACTION_SET_NAME).count + 1
-        
-        points = []
-        
-        payload = {
-                        "score": score,
-                        "actions": actions
-                    }
-        
-        for img_embedding in self.last_img_embeddings:
-            
-            points.append(
-                models.PointStruct(
-                        id = int(new_id),
-                        vector=img_embedding.tolist(),
-                        payload = payload
-                        )
-            )
-            new_id+=1
-            
-        try:
-            self.db.upsert(
-                collection_name=IMG_ACTION_SET_NAME,
-                points=points
-            )
-        except Exception as e:
-            self.get_logger().info(f"Exception during image update: {e}")
-                
-    def attach_actions_to_spec_embeddings(self,actions:list[tuple],score:float):
-        
-        new_id = self.db.count(SPECTOGRAM_ACTION_NAME).count + 1
-        
-        points = []
-        
-        payload = {
-                        "score": score,
-                        "actions": actions
-                    }
-        
-        for spec_embeddings in self.last_spectogram_embeddings:
-            
-            points.append(
-                models.PointStruct(
-                                id = int(new_id),
-                                vector=spec_embeddings.tolist(),
-                                payload = payload
-                                )
-            )
-            
-            new_id += 1
-            
-        try:
-            self.db.upsert(
-                collection_name=SPECTOGRAM_ACTION_NAME,
-                points=points
-            )
-        except Exception as e:
-            self.get_logger().info(f"Exception during spec update: {e}")
+        return points
     
-    def update_actions_for_embeddings(self,actions:list[tuple],score:float):
-        
-        self.attach_actions_to_image_embeddings(actions,score)
-        
-        self.attach_actions_to_spec_embeddings(actions,score)
-    
-    
-    def image_action_retrival(self):
-        
-        actions_lists = []
-        
-        if self.image is not None and self.depth is not None:
-                    
-            self.last_img_embeddings = generate_embedding(self.image,self.depth)
-            
-            # get actions lists associated with it
-            
-            # payloads for analazying
-            
-            for img_embedding in self.last_img_embeddings:
-                
-                try:
-                            
-                    hits = self.db.query_points(
-                        collection_name=IMG_ACTION_SET_NAME,
-                        query=img_embedding,
-                        limit=3
-                    )
-                
-                    points = hits.points
-                    
-                    for hit in points:
-                        if hit.score < 0.25:
-                            if self.check_actions_payload(hit.payload):
-                                actions_lists.append(hit.payload)
-                except Exception as e:
-                    self.get_logger().info(f"Excpetion in image retrival: {e}")
-            
-                # self.get_logger().info(f'Points: {points}')
-        else:
-            self.get_logger().warning('No visual data!')
-            
-        return actions_lists
-    
-    def spectogram_action_retrival(self):
-        
-        actions_lists = []
-        
-        if self.spectogram is not None:
-                    
-            self.last_spectogram_embeddings = generate_embedding_spec(self.spectogram)
-            
-            # get actions lists associated with it
-            
-            # payloads for analazying
-            
-            for spec_embedding in self.last_spectogram_embeddings:
-                
-                try:
-                            
-                    hits = self.db.query_points(
-                        collection_name=SPECTOGRAM_ACTION_NAME,
-                        query=spec_embedding,
-                        limit=3
-                    )
-                
-                    points = hits.points
-                    
-                    for hit in points:
-                        if hit.score < 0.25:
-                            if self.check_actions_payload(hit.payload):
-                                actions_lists.append(hit.payload)
-                except Exception as e:
-                    self.get_logger().info(f"Excpetion in spectogram retrival: {e}")
-            
-                # self.get_logger().info(f'Points: {points}')
-        else:
-            self.get_logger().warning('No spectogram data!')
-            
-        return actions_lists
-    
-    def action_crossovers(self,actions_lists):
-        
-        actions = []
-        
-        if len(actions_lists) < 2:
-            
-            action_count = int(np.random.uniform(1,64))
-            
-            for i in range(action_count):
-                
-                v = 2*np.random.random() - 1
-                w = 2*np.random.random() - 1
-                
-                actions.append((v,w))
-                
-            return actions
-        
-        # for now we will only do this with two actions
-        # when we incorporate map we will use more predictive 
-        # retrival approach
-        
-        a1 = actions_lists[0]["actions"]
-        a2 = actions_lists[1]["actions"]
-        
-        random.shuffle(a1)
-        random.shuffle(a2)
-        
-        actions.extend(a1[:int(np.ceil(len(a1)/2))])
-        actions.extend(a2[:int(np.ceil(len(a2)/2))])
-                            
-        # perform mutations
-        
-        self.mutate_actions(actions)
-                    
-        random.shuffle(actions)
-        
-        return actions
-    
-    def mutate_actions(self,actions:list[tuple],threshold:float = 0.1,mean:float = 0.1):
-        
-        action_mask = np.random.random(len(actions))
-        
-        for i in range(len(actions)):
-            if action_mask[i] < threshold:
-                v = actions[i][0] + (2*np.random.random()-1)*mean
-                w = actions[i][1] + (2*np.random.random()-1)*mean
-                
-                actions[i] = (v,w)
                 
     def tick_func(self):
         # emotion validation pipeline
@@ -1038,6 +811,11 @@ class MapMind(Node):
         # we can reduce the resolution of input image and thus
         # number of embeddings generated or reduce the 
         # dimensionality of embeddings ...
+        #
+        # Apparently reducing resolution to 56x56 and splitting
+        # into 49 parts of 8x8 gives medicore results but 
+        # for single 8x8 embedding we can retrieve points in real time
+        # but is the 8x8 too small?
         
         
         if score < 0:
@@ -1046,26 +824,25 @@ class MapMind(Node):
                 # generate embeddings
                 self.last_img_embeddings = generate_embedding(self.image,self.depth)
                 # gather points associated with embeddings
-                # points = self.get_points_from_image_embeddings()
+                points = self.get_points_from_embeddings(self.last_img_embeddings)
         
                 # # update emotion map with those points
-                # for p in points:
-                #     x = p[0]
-                #     y = p[1]
-                #     v = p[2]
+                for p in points:
+                    x = p[0]
+                    y = p[1]
+                    v = p[2]
                     
-                #     self.push_point_at_position(x,y,v)
-                
-                points = self.get_points_in_radius(self.x,self.y,radius=4.0)
-                
+                    # self.push_point_at_position(x,y,v)
+                                
                 # self.get_logger().info(f"Retrieved {len(points)} points from map")
                 # update image embeddings with current points in map
                 
                 # a major slow down
-                self.add_points_to_image_embeddings(points)
+                # self.add_point_to_embeddings((self.x,self.y,score),self.last_img_embeddings)
 
             # update current position point
-            self.push_point_at_position(self.x,self.y,score)
+            # for point in points:
+            #     self.push_point_at_position(point[0],point[1],score)
         
         return
         

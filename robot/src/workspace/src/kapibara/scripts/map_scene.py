@@ -10,6 +10,7 @@ from sensor_msgs.msg import CompressedImage,Image
 from sensor_msgs_py import point_cloud2
 from nav_msgs.msg import Odometry,OccupancyGrid
 
+
 import torch
 
 import cv2
@@ -78,6 +79,12 @@ class SceneMapper(Node):
         
         self.yaw = 0.0
         
+        self.target_yaw = np.pi/2.0
+        
+        self.yaw_pid_p = 40.0
+        self.yaw_pid_d = 1.75
+        self.last_yaw_error = 0.0
+        
         # map coordinates
         self.map_x = 0
         self.map_y = 0
@@ -88,6 +95,7 @@ class SceneMapper(Node):
         self.yaw_when_collision = 0.0
         
         self.rotate_againt_obstacle = False
+        self.wait_for_odom = True
         
         self.map = None
         self.image = None
@@ -95,6 +103,8 @@ class SceneMapper(Node):
         self.checkpoints:list[Checkpoint] = []
         
         self.bridge = CvBridge()
+        
+        self.last_odom_timestamp = None
         
     def add_checkpoint(self):
         checkpoint = Checkpoint(
@@ -144,12 +154,39 @@ class SceneMapper(Node):
     
     def odom_callback(self,msg: Odometry):
         
+        if self.last_odom_timestamp is None:
+            self.last_odom_timestamp = float(msg.header.stamp.sec) + msg.header.stamp.nanosec * 1e-9
+            return
+        
+        timestamp = float(msg.header.stamp.sec) + msg.header.stamp.nanosec * 1e-9
+        
         self.x = msg.pose.pose.position.x
         self.y = msg.pose.pose.position.y
         
-        self.yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
+        self.yaw = self.quaternion_to_yaw(msg.pose.pose.orientation) + np.pi
         
         self.get_logger().info(f'Robot position: {self.x} {self.y} {self.yaw}')
+        self.wait_for_odom = False
+        
+        msg = Twist()
+        
+        yaw_error = self.target_yaw - self.yaw
+        
+        dt = timestamp - self.last_odom_timestamp
+        self.last_odom_timestamp = timestamp
+        
+        p = self.yaw_pid_p * yaw_error
+        d = self.yaw_pid_d * ((yaw_error - self.last_yaw_error)/dt)
+        msg.angular.z = p + d
+        self.last_yaw_error = yaw_error
+                
+        msg.angular.z = np.clip(msg.angular.z, -3.0, 3.0)
+        
+        self.get_logger().info(f'PID: P: {p}, D: {d}, Cmd angular.z: {msg.angular.z}')
+        
+        msg.linear.x = 0.0    
+
+        self.publisher_.publish(msg)
         
     def map_callaback(self, msg: OccupancyGrid):
         self.get_logger().info('Got map!')
@@ -193,6 +230,9 @@ class SceneMapper(Node):
     
     def tick(self):
         
+        if self.wait_for_odom:
+            return
+        
         self.tick_counter += 1
         
         if self.tick_counter % 25 == 0:
@@ -205,13 +245,7 @@ class SceneMapper(Node):
                 self.stop()
                 return
 
-        msg = Twist()
         
-        msg.linear.x = 0.0
-        msg.angular.z = 1.5
-    
-
-        self.publisher_.publish(msg)
         
 
     def timer_callback(self):
