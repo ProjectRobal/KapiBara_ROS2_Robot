@@ -79,7 +79,7 @@ class SceneMapper(Node):
         
         self.yaw = 0.0
         
-        self.target_yaw = np.pi/2.0
+        self.target_yaw = np.pi/2
         
         self.yaw_pid_p = 40.0
         self.yaw_pid_d = 1.75
@@ -163,14 +163,14 @@ class SceneMapper(Node):
         self.x = msg.pose.pose.position.x
         self.y = msg.pose.pose.position.y
         
-        self.yaw = self.quaternion_to_yaw(msg.pose.pose.orientation) + np.pi
-        
+        self.yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
+                        
         self.get_logger().info(f'Robot position: {self.x} {self.y} {self.yaw}')
         self.wait_for_odom = False
         
         msg = Twist()
         
-        yaw_error = self.target_yaw - self.yaw
+        yaw_error = (self.target_yaw - self.yaw + 180) % 360 - 180
         
         dt = timestamp - self.last_odom_timestamp
         self.last_odom_timestamp = timestamp
