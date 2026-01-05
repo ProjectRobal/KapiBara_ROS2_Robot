@@ -55,6 +55,10 @@ from qdrant_client.http import models
 
 import random
 
+import uuid
+
+from tiny_vectordb import VectorDatabase
+
 ID_TO_EMOTION_NAME = [
     "angry",
     "fear",
@@ -307,11 +311,9 @@ class MapMind(Node):
         
         self.current_face_embeddings = []
         
-        self.db = QdrantClient(host='0.0.0.0',port=6333)
-        
         self.initialize_db()
         
-        self.face_db = FaceSqlite(self.db)
+        # self.face_db = FaceSqlite(self.db)
         
         self.pat_detected = 0.0
                 
@@ -369,66 +371,50 @@ class MapMind(Node):
         
     def reinitialize_db(self):
         
-        self.db.delete_collection(IMG_ACTION_SET_NAME)
-        
         self.initialize_db()
         
     def initialize_db(self):
-                                
-        if not self.db.collection_exists(GENERAL_POINT_DB_NAME):
-            self.get_logger().warning("General point database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=GENERAL_POINT_DB_NAME,
-                vectors_config=VectorParams(size=GENRAL_POINT_EMBEDDING_SHAPE, distance=Distance.EUCLID),
-                # quantization_config=models.ProductQuantization(
-                #     product=models.ProductQuantizationConfig(
-                #         compression=models.CompressionRatio.X16,
-                #         always_ram=True,
-                #     ),
-                # ),
-            )
-            
-        # intialize point map
-        if not self.db.collection_exists(POINT_MAP_DB):
-            self.get_logger().warning("Points map database not exist, creating new one!")
-            self.db.create_collection(
-                collection_name=POINT_MAP_DB,
-                vectors_config=VectorParams(size=2, distance=Distance.EUCLID),
-                # quantization_config=models.ProductQuantization(
-                #     product=models.ProductQuantizationConfig(
-                #         compression=models.CompressionRatio.X16,
-                #         always_ram=True,
-                #     ),
-                # ),
-            )
-            
-            self.db.create_payload_index(
-                collection_name=POINT_MAP_DB,
-                field_name="value",
-                field_schema=PayloadSchemaType.FLOAT
-            )
+        
+        collection_configs = [
+            {
+                'name': GENERAL_POINT_DB_NAME,
+                'dimension': GENRAL_POINT_EMBEDDING_SHAPE,
+            },
+            {
+                'name': POINT_MAP_DB,
+                'dimension': 2
+            },
+            {
+                'name':'faces',
+                'dimension':160
+            }
+        ]
+        
+        self.db = VectorDatabase("test.db", collection_configs)
+        
+        self.general_db = self.db[GENERAL_POINT_DB_NAME]
+        self.point_db = self.db[POINT_MAP_DB]
         
             
     def get_points_in_radius(self,x:float,y:float,radius:float = 0.5)->list[tuple]:
-        hits = self.db.query_points(
-            collection_name=POINT_MAP_DB,
-            with_vectors=True,
-            query=[x,y],
-            limit=64
-        )
+        
+        search_ids, search_scores = self.point_db.search([x,y], k=64)
 
+        values = []
+        points_id = []
         points = []
-        for hit in hits.points:
-            if hit.score > radius:
+        for id,score in zip(search_ids, search_scores):
+            if score > radius:
                 continue
             
-            payload = hit.payload
-            if payload is not None:
-                
-                vec = hit.vector
-                
-                points.append((vec[0],vec[1],payload["value"]))
+            payload = id.split(":")[1]
+            values.append(float(payload))
+            points_id.append(id)
+            # points.append((,vec[1],float(payload)))
 
+        for val,block in zip(values,self.point_db.getBlock(points_id)):
+            points.append((block[0],block[1],val))
+        
         return points
 
     def get_point_at_position(self,x:float,y:float,pop:bool = False)->float:
@@ -445,26 +431,19 @@ class MapMind(Node):
         :rtype: float
         """
         
-        
-        hits = self.db.query_points(
-            collection_name=POINT_MAP_DB,
-            query=[x,y],
-            limit=1
-        )
+        search_ids, search_scores = self.point_db.search([x,y], k=1)
         
         
-        if len(hits.points) == 1 and \
-            hits.points[0].score < 0.05:
-        
-            value = hits.points[0].payload["value"]
+        if len(search_ids) == 1 and \
+            search_scores[0] < 0.01:
+
+            value = float(search_ids[0].split(":")[1])
             
             if pop:
                 # pop the point from the map
-                self.db.delete(POINT_MAP_DB,
-                            points_selector=models.PointIdsList(
-                                    points=[x,y],
-                                ),
-                            )
+                self.point_db.deleteBlock(
+                    [search_ids[0]]
+                )
         
             return value
 
@@ -472,33 +451,21 @@ class MapMind(Node):
     
     def push_point_at_position(self,x:float,y:float,value:float):
         
-        hits = self.db.query_points(
-            collection_name=POINT_MAP_DB,
-            query=[x,y],
-            limit=1
-        )
-        
-        new_id = self.db.count(POINT_MAP_DB).count + 1
-        
-        if len(hits.points) == 1 and \
-            hits.points[0].score < 0.05:
-                new_id = hits.points[0].id
-                
-        try:
-            self.db.upsert(
-                collection_name=POINT_MAP_DB,
-                points=[
-                    models.PointStruct(
-                        id = int(new_id),
-                        vector=[x,y],
-                        payload = {
-                            "value": float(value)
-                        }
-                    )
-                ]
+        search_ids, search_scores = self.point_db.search([x,y], k=1)
+
+        if len(search_ids) == 1 and \
+            search_scores[0] < 0.01:
+            
+            self.point_db.deleteBlock(
+                [search_ids[0]]
             )
-        except Exception as e:
-            self.get_logger().info(f"Exception during points update: {e}")
+
+        new_id = str(uuid.uuid4())+":"+str(new_id)
+        
+        self.point_db.setBlock(
+            [new_id],
+            [[x,y]]
+        )        
         
     def send_command(self,linear:float,angular:float):
         
@@ -680,12 +647,12 @@ class MapMind(Node):
         :type points: list[tuple]
         """
         
-        points_to_push = []
+        points_id = []
 
         for embedding in embeddings:
-                        
-            new_id = self.db.count(GENERAL_POINT_DB_NAME).count + 1
             
+            new_id = uuid.uuid4()
+                                    
             n_points = np.array(point,dtype=np.float32)
             
             payload = n_points
@@ -694,17 +661,11 @@ class MapMind(Node):
 
             payload = base64.b64encode(payload.tobytes())
             
-            points_to_push.append(
-                models.PointStruct(
-                        id = int(new_id),
-                        vector=embedding,
-                        payload = {"points": payload}  
-                        )
-                )
-            
-        self.db.upsert(
-            collection_name=GENERAL_POINT_DB_NAME,
-            points=points_to_push
+            points_id.append(str(new_id)+":"+payload.decode('ascii'))
+        
+        self.general_db.setBlock(
+            points_id,
+            embeddings
         )
         
     def get_points_from_embeddings(self,embeddings)->list[tuple]:
@@ -716,17 +677,15 @@ class MapMind(Node):
         for embedding in embeddings:
             
             # check if embeddings aren't aleardy presents
-            hits = self.db.query_points(
-                        collection_name=GENERAL_POINT_DB_NAME,
-                        query=embedding,
-                        search_params=models.SearchParams(hnsw_ef=128, exact=False),
-                        limit=4
-                    )
             
-            for hit in hits.points:
-                if hit.score > 0.1:
+            search_ids, search_scores = self.general_db.search(embedding, k=4)
+            
+            for id,score in zip(search_ids, search_scores):
+                if score > 0.1:
                     continue
-                payload = base64.b64decode(hit.payload["points"])
+                    
+                payload = id.split(":")[1].encode('ascii')
+                payload = base64.b64decode(payload)
                 
                 point = np.frombuffer(payload, dtype=np.float32)
                 
@@ -832,17 +791,17 @@ class MapMind(Node):
                     y = p[1]
                     v = p[2]
                     
-                    # self.push_point_at_position(x,y,v)
+                    self.push_point_at_position(x,y,v)
                                 
                 # self.get_logger().info(f"Retrieved {len(points)} points from map")
                 # update image embeddings with current points in map
                 
                 # a major slow down
-                # self.add_point_to_embeddings((self.x,self.y,score),self.last_img_embeddings)
+                self.add_point_to_embeddings((self.x,self.y,score),self.last_img_embeddings)
 
             # update current position point
-            # for point in points:
-            #     self.push_point_at_position(point[0],point[1],score)
+            for point in points:
+                self.push_point_at_position(point[0],point[1],score)
         
         return
         

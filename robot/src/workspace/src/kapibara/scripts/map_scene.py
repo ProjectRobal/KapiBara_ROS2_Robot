@@ -172,17 +172,40 @@ class SceneMapper(Node):
         
         yaw_error = (self.target_yaw - self.yaw + 180) % 360 - 180
         
-        dt = timestamp - self.last_odom_timestamp
-        self.last_odom_timestamp = timestamp
+        # dt = timestamp - self.last_odom_timestamp
+        # self.last_odom_timestamp = timestamp
         
-        p = self.yaw_pid_p * yaw_error
-        d = self.yaw_pid_d * ((yaw_error - self.last_yaw_error)/dt)
-        msg.angular.z = p + d
-        self.last_yaw_error = yaw_error
+        # p = self.yaw_pid_p * yaw_error
+        # d = self.yaw_pid_d * ((yaw_error - self.last_yaw_error)/dt)
+        # msg.angular.z = p + d
+        # self.last_yaw_error = yaw_error
+
+        a_yaw_error = abs(yaw_error)
+        
+        if a_yaw_error > np.pi/2:
+            msg.angular.z = 3.0
+        elif a_yaw_error > np.pi/4:
+            msg.angular.z = 3.0
+        elif a_yaw_error > np.pi/12:
+            msg.angular.z = 2.35
+        elif a_yaw_error > np.pi/36:
+            msg.angular.z = 2.0
+        elif a_yaw_error > np.pi/72:
+            msg.angular.z = 1.4
+        elif a_yaw_error > np.pi/144:
+            msg.angular.z = 1.25
+        elif a_yaw_error > np.pi/288:
+            msg.angular.z = 1.1
+        elif a_yaw_error > np.pi/576:
+            msg.angular.z = 1.05
+        else:
+            msg.angular.z = 0.0
+        
+        msg.angular.z *= np.sign(yaw_error)
                 
         msg.angular.z = np.clip(msg.angular.z, -3.0, 3.0)
         
-        self.get_logger().info(f'PID: P: {p}, D: {d}, Cmd angular.z: {msg.angular.z}')
+        self.get_logger().info(f'Yaw error: {yaw_error} Cmd angular.z: {msg.angular.z}')
         
         msg.linear.x = 0.0    
 
