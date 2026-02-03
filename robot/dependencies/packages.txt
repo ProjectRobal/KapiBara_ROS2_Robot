@@ -21,3 +21,4 @@ ros-humble-ros2-controllers
 ros-humble-xacro
 ros-humble-mqtt-client
 ros-humble-rtabmap-ros
+ros-humble-mola-*

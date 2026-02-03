@@ -1,5 +1,3 @@
-include:
-  - aux_services.yaml
 
 services:
   gazebo:

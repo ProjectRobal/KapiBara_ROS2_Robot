@@ -111,7 +111,7 @@
                 </command_interface> -->
                 <state_interface name="velocity" />
                 <state_interface name="position" />
-                <param name="mimic">$(arg robot_name)_wheel_left1_joint</param>
+                <param name="mimic">$(arg robot_name)_wheel_left1_joint</param> 
                 <param name="multiplier">1</param>
             </joint>
 

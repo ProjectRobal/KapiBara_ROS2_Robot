@@ -49,6 +49,7 @@ install(
 ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
+  scripts/camera_sim.py
   scripts/map_mind.py
   scripts/sensor_broadcaster.py
   scripts/map_scene.py

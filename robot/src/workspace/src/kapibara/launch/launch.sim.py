@@ -102,54 +102,25 @@ def generate_launch_description():
         ]
     )
     
-    parameters=[{
-          'use_sim_time': True,
-          'frame_id':'KapiBara_base_link',
-          'subscribe_depth':True,
-          'subscribe_odom_info':True,
-          'odom_frame_id': 'KapiBara_odom',
-          'publish_tf':True,
-          'approx_sync':True,
-          'database_path':'/app/src/map/rtabmap.db',
-        'Odom/ResetCountdown':'1',
-          'Rtabmap/StartNewMapOnLoopClosure':"true",
-          "Odom/Strategy": "0",
-          "Vis/CorType": "1",
-          "OdomF2M/MaxSize": "1000",
-          "Vis/MaxFeatures": "600",
-          "GFTT/MinDistance": "10"
-          
-          }]
+    mola_cfg = os.path.join(get_package_share_directory(pkg_name), 'config', 'mola_cfg.yaml')
     
-    remappings=[
-          ('rgb/image', 'camera/image_raw'),
-          ('rgb/camera_info', 'camera/camera_info'),
-          ('depth/image', 'camera/depth/image_raw')]
-    
-    rtabmap_odom = Node(
-            package='rtabmap_odom', executable='rgbd_odometry', output='screen',
-            parameters=parameters,
-            remappings=remappings,
-            namespace="KapiBara")
+    tf_remaps = [('tf', '/tf'),
+                 ('tf_static', '/tf_static')]
 
-    rtabmap_slam = Node(
-            package='rtabmap_slam', executable='rtabmap', output='screen',
-            parameters=parameters,
-            remappings=remappings,
-            # arguments=['-d'],
-            namespace="KapiBara")
-
-    rtabmap_viz = Node(
-            package='rtabmap_viz', executable='rtabmap_viz', output='screen',
-            parameters=parameters,
-            remappings=remappings,
-            namespace="KapiBara")
     
-    delayed_rtabmap= TimerAction(
+    mola = Node(
+            package='mola_launcher',
+            executable='mola-cli',
+            output='screen',
+            parameters=[{'use_sim_time': True}],
+            remappings=tf_remaps,
+            namespace="KapiBara",
+            arguments=[mola_cfg],
+        )
+    
+    delayed_mola= TimerAction(
        actions=[
-            rtabmap_odom,
-            # rtabmap_slam,
-            # rtabmap_viz
+            mola
            ],
         period=10.0
     )
@@ -165,7 +136,8 @@ def generate_launch_description():
         joint_broad_spawner,
         ears_controller_spawner,
         mic,
-        map_mind,
+        # map_mind,
+        delayed_mola
         # delayed_rtabmap
     ])
 

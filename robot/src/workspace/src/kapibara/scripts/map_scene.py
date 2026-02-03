@@ -11,10 +11,10 @@ from sensor_msgs_py import point_cloud2
 from nav_msgs.msg import Odometry,OccupancyGrid
 
 
-import torch
-
 import cv2
 from cv_bridge import CvBridge
+
+import os
 
 import numpy as np
 
@@ -29,20 +29,8 @@ class SceneMapper(Node):
 
     def __init__(self):
         super().__init__('cmd_vel_publisher')
-
-        # Publisher
-        self.publisher_ = self.create_publisher(
-            Twist,
-            '/KapiBara/motors/cmd_vel_unstamped',
-            10
-        )
         
-        self.subscription = self.create_subscription(
-            PointCloud2,
-            '/KapiBara/camera/points',
-            self.points_callback,
-            10
-        )
+        self.declare_parameter("output_path")
         
         self.odom_sub = self.create_subscription(
             Odometry,
@@ -64,39 +52,21 @@ class SceneMapper(Node):
             self.image_callback,
             10
         )
-
-        # Timer period (0.01 seconds = 100 Hz)
-        timer_period = 0.01
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-        self.obstacle_detected = False
         
-        self.tick_counter = 0
-
-        self.get_logger().info(f'CmdVel publisher started at {int(1 / timer_period)} Hz')
+        self.output_path = self.get_parameter("output_path").get_parameter_value().string_value
         
         self.x = 0.0
         self.y = 0.0
         
         self.yaw = 0.0
         
-        self.target_yaw = np.pi/2
-        
-        self.yaw_pid_p = 40.0
-        self.yaw_pid_d = 1.75
-        self.last_yaw_error = 0.0
+        self.target_yaw = 0.0
         
         # map coordinates
         self.map_x = 0
         self.map_y = 0
         self.resolution = 0.05
-        
-        self.map_step = 0
-        
-        self.yaw_when_collision = 0.0
-        
-        self.rotate_againt_obstacle = False
-        self.wait_for_odom = True
-        
+                                        
         self.map = None
         self.image = None
         
@@ -104,8 +74,9 @@ class SceneMapper(Node):
         
         self.bridge = CvBridge()
         
-        self.last_odom_timestamp = None
-        
+        # it will holds data of collected maps with associated images
+        self.timestamps = []
+                
     def add_checkpoint(self):
         checkpoint = Checkpoint(
             image=self.image.copy(),
@@ -153,64 +124,20 @@ class SceneMapper(Node):
         return map_x, map_y
     
     def odom_callback(self,msg: Odometry):
-        
-        if self.last_odom_timestamp is None:
-            self.last_odom_timestamp = float(msg.header.stamp.sec) + msg.header.stamp.nanosec * 1e-9
-            return
-        
-        timestamp = float(msg.header.stamp.sec) + msg.header.stamp.nanosec * 1e-9
-        
+                
         self.x = msg.pose.pose.position.x
         self.y = msg.pose.pose.position.y
+        
+        # set point as visited
+        map_x, map_y = self.position_to_visited_coords(self.x, self.y)
+        if map_x is not None and map_y is not None:
+            self.visited_points[map_y, map_x] = 1.0
         
         self.yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
                         
         self.get_logger().info(f'Robot position: {self.x} {self.y} {self.yaw}')
         self.wait_for_odom = False
-        
-        msg = Twist()
-        
-        yaw_error = (self.target_yaw - self.yaw + 180) % 360 - 180
-        
-        # dt = timestamp - self.last_odom_timestamp
-        # self.last_odom_timestamp = timestamp
-        
-        # p = self.yaw_pid_p * yaw_error
-        # d = self.yaw_pid_d * ((yaw_error - self.last_yaw_error)/dt)
-        # msg.angular.z = p + d
-        # self.last_yaw_error = yaw_error
-
-        a_yaw_error = abs(yaw_error)
-        
-        if a_yaw_error > np.pi/2:
-            msg.angular.z = 3.0
-        elif a_yaw_error > np.pi/4:
-            msg.angular.z = 3.0
-        elif a_yaw_error > np.pi/12:
-            msg.angular.z = 2.35
-        elif a_yaw_error > np.pi/36:
-            msg.angular.z = 2.0
-        elif a_yaw_error > np.pi/72:
-            msg.angular.z = 1.4
-        elif a_yaw_error > np.pi/144:
-            msg.angular.z = 1.25
-        elif a_yaw_error > np.pi/288:
-            msg.angular.z = 1.1
-        elif a_yaw_error > np.pi/576:
-            msg.angular.z = 1.05
-        else:
-            msg.angular.z = 0.0
-        
-        msg.angular.z *= np.sign(yaw_error)
                 
-        msg.angular.z = np.clip(msg.angular.z, -3.0, 3.0)
-        
-        self.get_logger().info(f'Yaw error: {yaw_error} Cmd angular.z: {msg.angular.z}')
-        
-        msg.linear.x = 0.0    
-
-        self.publisher_.publish(msg)
-        
     def map_callaback(self, msg: OccupancyGrid):
         self.get_logger().info('Got map!')
         self.map = np.array(msg.data,dtype=np.int8).reshape((msg.info.height, msg.info.width))
@@ -224,60 +151,42 @@ class SceneMapper(Node):
         
         self.get_logger().info('Got image with format: %s' % msg.encoding)
         
-        self.image = self.bridge.imgmsg_to_cv2(msg)
-        
-        
-    def points_callback(self, msg: PointCloud2):
-        # Read points from PointCloud2
-        points = point_cloud2.read_points_numpy(
-            msg,
-            field_names=("x", "y", "z"),
-            skip_nans=True,
-            reshape_organized_cloud=True
-        )
-        
-        sorted_points = np.sort(points)
-        
-        min_points = np.mean(sorted_points[0:10])
-        
-        self.obstacle_detected = min_points < 0.0
-        
-        if self.obstacle_detected:    
-            self.get_logger().info(f'Obstacle detected!')
-            
-    def stop(self):
-        msg = Twist()
-        msg.linear.x = 0.0
-        msg.angular.z = 0.0
-        self.publisher_.publish(msg)
-    
-    def tick(self):
-        
-        if self.wait_for_odom:
+        if self.map is not None or self.wait_for_odom:
+            self.get_logger().info('Waitting for map and odometry data')
             return
         
-        self.tick_counter += 1
+        self.image = self.bridge.imgmsg_to_cv2(msg)
         
-        if self.tick_counter % 25 == 0:
-            self.tick_counter = 0
-            
-            if self.image is not None:
-                self.get_logger().info('Adding checkpoint!')
-                self.add_checkpoint()
-                
-                self.stop()
-                return
-
+        grayscale = cv2.cvtColor(self.image,cv2.COLOR_BGR2GRAY)
         
+        img = cv2.resize(grayscale,(224,224))
         
-
-    def timer_callback(self):
-        self.timer.cancel()
+        map = np.array(self.map)
         
-        self.tick()
+        m_x,m_y = self.position_to_map_coords(self.x,self.y)
         
-        self.timer.reset()
-
+        map[m_x][m_y] = 2.0
+        
+        self.timestamps.append(
+            (img,map)
+        )
+        
+        self.save_timestamp()
+    
+    def save_timestamp(self):
+        if not os.path.exists(self.output_path):
+            os.mkdir(self.output_path)
+        
+        i = len(self.timestamps)
+        timestamp = self.timestamps[-1]
+        timestamp_dir = f"{self.output_path}/step_{i}"
+        
+        if not os.path.exists(timestamp_dir):
+            os.mkdir(timestamp_dir)
+        
+        np.save(f"{timestamp_dir}/img.np",timestamp[0])
+        np.save(f"{timestamp_dir}/map.np",timestamp[1])
+    
 
 def main(args=None):
     rclpy.init(args=args)

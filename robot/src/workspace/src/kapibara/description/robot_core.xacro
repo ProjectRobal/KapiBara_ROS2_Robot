@@ -206,7 +206,7 @@
 
     <!-- RIGHT WHEEL LINK -->
 
-    <joint name="$(arg robot_name)_wheel_right1_joint" type="continuous">
+    <joint name="$(arg robot_name)_wheel_right2_joint" type="continuous">
         <mimic joint="$(arg robot_name)_wheel_right3_joint" multiplier="1" offset="0"/>
         <parent link="$(arg robot_name)_chassis" />
         <child link="$(arg robot_name)_right_wheel1" />
@@ -244,7 +244,7 @@
     </gazebo>
 
 
-    <joint name="$(arg robot_name)_wheel_right2_joint" type="continuous">
+    <joint name="$(arg robot_name)_wheel_right1_joint" type="continuous">
         <mimic joint="$(arg robot_name)_wheel_right3_joint" multiplier="1" offset="0"/>
         <parent link="$(arg robot_name)_chassis" />
         <child link="$(arg robot_name)_right_wheel2" />
